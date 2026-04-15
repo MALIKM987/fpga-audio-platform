@@ -19,7 +19,7 @@ module tone_gen_tb;
         rst = 1'b0;
 
         #2000;
-        ;
+        $finish;
     end
 
 endmodule
