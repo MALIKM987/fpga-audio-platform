@@ -1,0 +1,20 @@
+# Vivado
+*.jou
+*.log
+*.str
+*.wdb
+*.wcfg
+*.xpr
+*.runs/
+*.sim/
+
+# Gowin
+*.fs
+*.log
+impl/
+syn/
+pnr/
+
+# system
+.DS_Store
+Thumbs.db
