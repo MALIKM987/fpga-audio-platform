@@ -12,6 +12,15 @@
 .sim/
 *.tmp
 
+# Vivado project subfolders
+sim/**/.Xil/
+sim/**/.cache/
+sim/**/.gen/
+sim/**/.runs/
+sim/**/.sim/
+sim/**/*.wpc
+sim/**/*.lpr
+
 # Gowin
 *.fs
 impl/
