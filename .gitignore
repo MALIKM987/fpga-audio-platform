@@ -5,16 +5,20 @@
 *.wdb
 *.wcfg
 *.xpr
-*.runs/
-*.sim/
+.Xil/
+.cache/
+.gen/
+.runs/
+.sim/
+*.tmp
 
 # Gowin
 *.fs
-*.log
 impl/
 syn/
 pnr/
+*.log
 
-# system
+# OS / editor
 .DS_Store
 Thumbs.db
