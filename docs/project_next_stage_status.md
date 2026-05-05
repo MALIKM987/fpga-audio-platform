@@ -81,6 +81,53 @@ Prosty dzielnik calkowitoliczbowy moze dac niedokladna czestotliwosc BCLK/LRCK. 
 - przygotowac PLL albo dzielnik ulamkowy,
 - zweryfikowac rzeczywiste `I2S_BCLK`, `I2S_LRCK` i `I2S_DIN` na analizatorze logicznym.
 
+## Weryfikacja etapu DAFX/EQ
+
+Sprawdzono `tang_audio_eq_top` na galezi `Version-with-accelerator` bez porownywania z `main`.
+
+Wyniki przegladu RTL:
+
+- `tang_audio_eq_top` ma kompletne polaczenia miedzy `test_mix_gen`, `button_control_top`, `eq3band_stereo`, dwoma instancjami `volume_control` i `i2s_tx`.
+- `test_mix_gen` generuje `sample_valid = 1` po resecie przy kazdym cyklu `clk`.
+- `eq3band_simple` ma dwucyklowa latencje valid: `sample_valid -> sample_out_valid`.
+- `eq3band_stereo` laczy validy kanalow L/R przez `left_valid & right_valid`.
+- `volume_control` ma jednocyklowa latencje valid.
+- Po rozbiegu pipeline `eq_valid` i `volume_left_valid/right_valid` sa aktywne stale, bo zrodlo testowe dostarcza probke w kazdym cyklu zegara.
+
+Wazne ograniczenie:
+
+- Obecny `i2s_tx` nie ma wejscia `sample_valid`, `sample_ready` ani `sample_tick`.
+- Przez to tor DSP pracuje z czestotliwoscia `clk`, a `i2s_tx` tylko okresowo pobiera aktualna wartosc `sample_left/right`.
+- Sama serializacja slowa I2S jest stabilna, bo `i2s_tx` kopiuje probke do rejestru przesuwnego `shreg` na poczatku slowa i przesuwa juz kopie, a nie zmieniajace sie wejscie.
+- Brakuje jednak jawnego handshake/sample tick, ktory mowilby generatorowi i filtrom, kiedy ma powstac nastepna probka audio.
+
+Minimalna poprawka na kolejny etap, bez przebudowy calego projektu:
+
+- dodac w `i2s_tx` wyjscie `sample_tick` albo `sample_request` aktywne raz na nowa probke/ramke audio,
+- uzyc tego ticku jako `sample_valid`/clock-enable dla `test_mix_gen`, `eq3band_stereo` i `volume_control`,
+- opcjonalnie zarejestrowac `volume_left_sample/right_sample` w topie tylko wtedy, gdy `volume_left_valid & volume_right_valid` sa aktywne,
+- zachowac dotychczasowy interfejs kompatybilny wstecz dla istniejacych topow.
+
+Testy nie zostaly uruchomione, poniewaz narzedzia symulacyjne (`iverilog`, `verilator`, `xvlog`, `vlog`) nie sa dostepne w PATH.
+
+Pliki wymagane dla topu `tang_audio_eq_top` w projekcie Gowin:
+
+- `rtl/audio/test_mix_gen.v`
+- `rtl/audio/i2s_tx.v`
+- `rtl/common/sync_2ff.v`
+- `rtl/common/debounce.v`
+- `rtl/common/button_onepulse.v`
+- `rtl/control/audio_param_regs.v`
+- `rtl/control/button_control_top.v`
+- `rtl/dsp/gain_lut_q2_14.v`
+- `rtl/dsp/eq3band_simple.v`
+- `rtl/dsp/eq3band_stereo.v`
+- `rtl/dsp/volume_lut_q2_14.v`
+- `rtl/dsp/volume_control.v`
+- `rtl/top/tang_audio_eq_top.v`
+
+Nie przypisano pinow przyciskow. Piny `btn_*`, `led_left_active`, `led_right_active` i `led_clip` nadal trzeba uzupelnic recznie w `.cst` po ustaleniu polaczen.
+
 ## Nastepny logiczny krok
 
 - Uruchomic `tang_audio_eq_top` na sprzecie.
