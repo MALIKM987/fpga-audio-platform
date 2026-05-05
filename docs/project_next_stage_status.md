@@ -33,6 +33,29 @@
 - Wybor gainu dla binow FFT przez `spectral_gain_select`.
 - Demonstrator `tang_audio_control_top`: `button_control_top -> volume_L/R -> volume_control -> i2s_tx`.
 
+## Etap: pierwszy korektor DAFX
+
+Dodano pierwszy realny blok korektora dzialajacy w dziedzinie czasu:
+
+- `rtl/audio/test_mix_gen.v` generuje testowy miks low/mid/high.
+- `rtl/dsp/eq3band_simple.v` dzieli sygnal na przyblizone pasma bass/mid/treble.
+- `rtl/dsp/eq3band_stereo.v` instancjuje korektor osobno dla kanalow L/R.
+- `rtl/top/tang_audio_eq_top.v` laczy `test_mix_gen -> eq3band_stereo -> volume_control -> i2s_tx`.
+
+Co dziala logicznie w RTL:
+
+- `bass_gain_L/R`, `mid_gain_L/R` i `treble_gain_L/R` realnie wplywaja na probki audio.
+- `volume_L/R` nadal dziala po korektorze.
+- `led_clip` sygnalizuje saturacje korektora.
+- FFT/IFFT nadal nie jest uzywane w torze audio.
+
+Co wymaga testu:
+
+- odsluch i pomiar I2S na sprzecie,
+- reakcja przyciskow po fizycznym przypisaniu pinow,
+- rzeczywiste progi clippingu dla wybranego poziomu sygnalu,
+- dokladnosc BCLK/LRCK.
+
 ## Co jest jeszcze niegotowe
 
 - Prawdziwy rdzen FFT.
@@ -60,7 +83,7 @@ Prosty dzielnik calkowitoliczbowy moze dac niedokladna czestotliwosc BCLK/LRCK. 
 
 ## Nastepny logiczny krok
 
-- Uruchomic `tang_audio_control_top` na sprzecie.
+- Uruchomic `tang_audio_eq_top` na sprzecie.
 - Sprawdzic `I2S_BCLK`, `I2S_LRCK` i `I2S_DIN` na analizatorze logicznym.
 - Sprawdzic, czy przyciski zmieniaja `volume_L/R`.
 - Sprawdzic LED aktywnego kanalu L/R.

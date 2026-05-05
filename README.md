@@ -55,6 +55,10 @@ Gotowe albo przygotowane na obecnym etapie:
 - `spectral_gain_select` - wybor gainu dla binow przyszlego FFT.
 - `volume_control` - regulacja glosnosci z saturacja signed 16-bit.
 - `tang_audio_control_top` - demonstracyjny top laczacy przyciski, volume i I2S.
+- `test_mix_gen` - generator testowego miksu low/mid/high dla korektora.
+- `eq3band_simple` - prosty korektor bass/mid/treble w dziedzinie czasu.
+- `eq3band_stereo` - wrapper stereo korektora L/R.
+- `tang_audio_eq_top` - demonstrator DAFX: `test_mix_gen -> EQ -> volume -> I2S`.
 - Dokumentacja panelu sterowania w `docs/`.
 - Testbenche dla czesci modulow w `tb/`.
 
@@ -92,13 +96,15 @@ Parametry audio sa oddzielne dla kanalu lewego i prawego:
 
 `CHANNEL_SELECT` wybiera aktywny kanal: `0 = LEFT`, `1 = RIGHT`. Przyciski regulacji zmieniaja tylko parametry aktywnego kanalu. LED `led_left_active` i `led_right_active` sygnalizuja wybrany kanal.
 
+W topie `tang_audio_eq_top` parametry `bass/mid/treble` realnie zmieniaja probki audio przez prosty korektor w dziedzinie czasu. FFT/IFFT nadal nie jest gotowe; `fft_ifft_accel_stub.v` pozostaje tylko kontraktem interfejsu dla przyszlego akceleratora.
+
 ## Struktura katalogow
 
 ```text
 rtl/audio    - bloki toru audio, np. tone_gen i i2s_tx
 rtl/common   - bloki wspolne, np. synchronizacja i debounce
 rtl/control  - sterowanie przyciskami i rejestry parametrow
-rtl/dsp      - bloki DSP, gain/volume i stub FFT/IFFT
+rtl/dsp      - bloki DSP, EQ, gain/volume i stub FFT/IFFT
 rtl/top      - top-level projektu i demonstratory
 tb           - testbenche symulacyjne
 docs         - dokumentacja projektu
@@ -133,13 +139,14 @@ Aktualny projekt narzedziowy moze uzywac kopii plikow z `gowin_impl/tang_audio_h
 
 - `i2s_tx` uzywa prostego dzielnika calkowitoliczbowego z 27 MHz, wiec sample rate moze nie byc dokladnie 48 kHz.
 - Tor audio jest jeszcze demonstracyjny.
+- Obecnie dziala prosty korektor w dziedzinie czasu, nie przetwarzanie widmowe.
 - FFT/IFFT jest zaplanowane, ale niezaimplementowane. Obecny `fft_ifft_accel_stub` jest tylko interfejsem/stubem.
 - Piny przyciskow nie sa jeszcze przypisane w constraints.
 
 ## Nastepne kroki
 
 - Uporzadkowac zrodla RTL/Gowin i utrzymywac `rtl/` jako canonical source.
-- Rozwijac `volume_control` i integracje `button_control_top` z topem demonstracyjnym.
+- Uruchomic `tang_audio_eq_top` na sprzecie i sprawdzic reakcje EQ/volume.
 - Utrzymac stub FFT/IFFT jako kontrakt interfejsu.
 - Dodac `sample_buffer`.
 - Zaimplementowac testowo mniejszy radix-2 FFT, np. 64/128 punktow.

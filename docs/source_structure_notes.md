@@ -38,3 +38,5 @@ Nie nalezy edytowac rownolegle obu kopii tego samego modulu. Zmiane najpierw wyk
 Nowy demonstrator `tang_audio_control_top` znajduje sie w `rtl/top/tang_audio_control_top.v`. Do uruchomienia go w Gowin trzeba dodac ten plik i jego zaleznosci RTL do projektu oraz uzupelnic constraints dla nowych przyciskow i LED.
 
 Aktualnie kopie `tone_gen.v`, `i2s_tx.v` i `tang_audio_top.v` w `gowin_impl/tang_audio_hw/src/` zostaly zsynchronizowane z wersjami w `rtl/`.
+
+Top `tang_audio_eq_top` jest nowszym demonstratorem DAFX i powinien byc dodawany do Gowin razem z plikami wymienionymi w `docs/hardware_bringup_tang_audio_eq.md`.

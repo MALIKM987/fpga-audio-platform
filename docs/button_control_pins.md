@@ -13,6 +13,7 @@ Projekt nie zgaduje fizycznych pinow przyciskow dla Tang Nano 20K. Do uruchomien
 - `btn_channel_select`
 - `led_left_active`
 - `led_right_active`
+- `led_clip`
 
 Istniejacy plik `gowin_impl/tang_audio_hw/src/tang_audio_hw.cst` zawiera piny dla zegara, I2S, `PA_SD` i starego portu `led`, ale nie zawiera jeszcze pinow panelu przyciskow ani nowych LED. Nie wpisano losowych pinow. TODO: uzupelnic `.cst` po ustaleniu faktycznego okablowania przyciskow i LED.
 
