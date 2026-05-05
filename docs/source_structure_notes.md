@@ -20,6 +20,13 @@ W tym repozytorium wykryto zdublowane moduly:
 - `rtl/audio/i2s_tx.v` oraz `gowin_impl/tang_audio_hw/src/i2s_tx.v`,
 - `rtl/top/tang_audio_top.v` oraz `gowin_impl/tang_audio_hw/src/tang_audio_top.v`.
 
+Audyt obejmuje tez constraints:
+
+- `constraints.sdc` w katalogu glownym oraz `gowin_impl/tang_audio_hw/src/constraints.sdc`,
+- `gowin_impl/tang_audio_hw/src/tang_audio_hw.cst`.
+
+Pliki `.sdc` sa kopia tego samego ograniczenia zegara 27 MHz. Plik `.cst` jest fizycznym opisem pinow dla aktualnego topu Gowin i nie powinien byc uzupelniany losowymi pinami przyciskow.
+
 Wersje w `rtl/` sa traktowane jako canonical source. Kopie w `gowin_impl/tang_audio_hw/src/` powinny byc synchronizowane z `rtl/`, jesli projekt Gowin nadal odwoluje sie do katalogu `src/`.
 
 ## Jak uniknac rozjazdu wersji
@@ -29,3 +36,5 @@ Najczystsze rozwiazanie to skonfigurowac projekt Gowin tak, aby bezposrednio uzy
 Nie nalezy edytowac rownolegle obu kopii tego samego modulu. Zmiane najpierw wykonuje sie w `rtl/`, a dopiero potem przenosi do `gowin_impl/tang_audio_hw/src/`, jesli projekt narzedziowy tego wymaga.
 
 Nowy demonstrator `tang_audio_control_top` znajduje sie w `rtl/top/tang_audio_control_top.v`. Do uruchomienia go w Gowin trzeba dodac ten plik i jego zaleznosci RTL do projektu oraz uzupelnic constraints dla nowych przyciskow i LED.
+
+Aktualnie kopie `tone_gen.v`, `i2s_tx.v` i `tang_audio_top.v` w `gowin_impl/tang_audio_hw/src/` zostaly zsynchronizowane z wersjami w `rtl/`.

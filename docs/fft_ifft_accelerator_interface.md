@@ -26,6 +26,7 @@ Dane sa w formacie signed fixed-point o szerokosci `DATA_WIDTH`, domyslnie 16 bi
 Docelowy akcelerator powinien zawierac:
 
 - `sample RAM` na ramke `FFT_N` probek,
+- `bit reversal` dla adresowania wejscia albo wyjscia FFT,
 - `twiddle ROM` z wartosciami wspolczynnikow zespolonych,
 - `butterfly unit` dla operacji radix-2,
 - `complex multiplier` dla mnozenia przez twiddle i gain widmowy,

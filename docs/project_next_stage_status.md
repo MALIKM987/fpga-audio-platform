@@ -1,66 +1,68 @@
 # Status po nastepnym etapie
 
-## Co zostalo zrobione
+## Co zostalo zrobione przez Codexa
 
-- Uporzadkowano opis struktury zrodel i wskazano `rtl/` jako canonical source.
-- Poprawiono testbenche tak, aby mialy proste sprawdzenia i komunikaty PASS/FAIL.
-- Dodano `volume_control` z LUT Q2.14 i saturacja signed 16-bit.
+- Dodano `sync_2ff`.
+- Dodano `debounce`.
+- Dodano `button_onepulse`.
+- Dodano `audio_param_regs`.
+- Dodano `button_control_top`.
+- Dodano `gain_lut_q2_14`.
+- Dodano `spectral_gain_select`.
+- Dodano dokumentacje przyciskow i panelu sterowania.
+
+## Co zostalo poprawione w tym etapie
+
+- README zostalo napisane od zera i opisuje aktualny stan bez sugerowania, ze FFT/IFFT juz dziala.
+- `.gitignore` zostal uzupelniony o artefakty Vivado/XSim, Gowin i pliki lokalne.
+- Testbenche dostaly proste sanity-checki i komunikaty PASS/FAIL.
+- Zsynchronizowano duplikaty `rtl/` i `gowin_impl/tang_audio_hw/src/` dla `tone_gen`, `i2s_tx` i `tang_audio_top`.
+- Dodano `volume_lut_q2_14` i `volume_control`.
 - Dodano top demonstracyjny `tang_audio_control_top`.
-- Zintegrowano `button_control_top` z parametrami stereo L/R.
-- Rozszerzono tor demonstracyjny o regulacje glosnosci L/R przed I2S TX.
-- Dodano stub interfejsu przyszlego akceleratora FFT/IFFT.
-- Dodano dokumentacje interfejsu FFT/IFFT i notatki o strukturze zrodel.
+- Dodano stub interfejsu przyszlego FFT/IFFT.
+- Dodano dokumentacje interfejsu przyszlego akceleratora.
 
-## Co dziala na tym etapie
+## Co jest gotowe
 
 - Generator tonu `tone_gen`.
-- Nadajnik `i2s_tx`.
-- Regulacja glosnosci L/R przez `volume_control`.
-- Wybor aktywnego kanalu L/R przez `CHANNEL_SELECT`.
-- Rejestry parametrow `bass`, `mid`, `treble` dla obu kanalow.
-- LED aktywnego kanalu: `led_left_active` i `led_right_active`.
-- Top demonstracyjny laczacy przyciski, volume i I2S: `tang_audio_control_top`.
+- Podstawowe wyjscie I2S przez `i2s_tx`.
+- Sterowanie przyciskami z synchronizacja, debounce i impulsem jednocyklowym.
+- Rejestry parametrow stereo L/R.
+- Regulacja glosnosci przez `volume_control`.
+- Wybor aktywnego kanalu L/R i LED aktywnego kanalu.
+- Wybor gainu dla binow FFT przez `spectral_gain_select`.
+- Demonstrator `tang_audio_control_top`: `button_control_top -> volume_L/R -> volume_control -> i2s_tx`.
 
-## Co jeszcze nie jest zrobione
+## Co jest jeszcze niegotowe
 
 - Prawdziwy rdzen FFT.
 - Prawdziwy rdzen IFFT.
-- `sample_buffer` dla ramek 512 probek.
-- `spectral_processor` mnozacy biny przez gain.
+- `sample_buffer`.
+- `spectral_processor` mnozacy biny zespolone przez gain.
 - Overlap-add.
-- Wejscie audio I2S/ADC.
-- Dokladne taktowanie audio 48 kHz przez PLL albo dzielnik ulamkowy.
-- Fizyczne przypisanie pinow wszystkich przyciskow.
+- Wejscie audio ADC/I2S.
+- Dokladny zegar audio.
+- Fizyczne piny przyciskow.
 
-## Nastepne etapy rozwoju
+## Problem I2S i zegara 48 kHz
 
-### Etap A
+Obecny `i2s_tx` uzywa prostego dzielnika calkowitoliczbowego z zegara 27 MHz. Dla 48 kHz i 16 bitow stereo docelowy BCLK wynosi:
+
+```text
+48000 * 16 * 2 = 1.536 MHz
+```
+
+Prosty dzielnik calkowitoliczbowy moze dac niedokladna czestotliwosc BCLK/LRCK. TODO:
+
+- sprawdzic wymagania MAX98357A,
+- przygotowac PLL albo dzielnik ulamkowy,
+- zweryfikowac rzeczywiste `I2S_BCLK`, `I2S_LRCK` i `I2S_DIN` na analizatorze logicznym.
+
+## Nastepny logiczny krok
 
 - Uruchomic `tang_audio_control_top` na sprzecie.
-- Sprawdzic, czy przyciski zmieniaja glosnosc.
-- Sprawdzic LED kanalu L/R.
-
-### Etap B
-
-- Poprawic taktowanie I2S.
-- Dodac PLL albo dzielnik ulamkowy dla dokladniejszego sample rate.
-
-### Etap C
-
-- Dodac `sample_buffer` dla ramek 512 probek.
-
-### Etap D
-
-- Zaimplementowac sequential radix-2 FFT accelerator.
-
-### Etap E
-
-- Dodac `spectral_processor`: `FFT bin -> spectral_gain_select -> mnozenie real/imag przez gain`.
-
-### Etap F
-
-- Dodac IFFT i overlap-add.
-
-### Etap G
-
-- Dodac wejscie audio z zewnetrznego ADC/kodeka I2S.
+- Sprawdzic `I2S_BCLK`, `I2S_LRCK` i `I2S_DIN` na analizatorze logicznym.
+- Sprawdzic, czy przyciski zmieniaja `volume_L/R`.
+- Sprawdzic LED aktywnego kanalu L/R.
+- Dopiero potem zaczac `sample_buffer` i testowy FFT 64/128 punktow.
+- Nastepnie przejsc do `FFT_N = 512`.

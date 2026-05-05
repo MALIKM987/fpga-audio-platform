@@ -110,7 +110,8 @@ module tang_audio_control_top #(
         .sample_out_valid(sample_right_valid)
     );
 
-    // Bass/mid/treble registers are generated above for a future spectral_processor:
+    // Bass/mid/treble registers are generated above for a future spectral_processor.
+    // FFT/IFFT is not implemented yet; planned path:
     // FFT -> spectral_gain_select -> complex bin gain -> IFFT -> volume -> I2S.
     i2s_tx #(
         .CLK_FREQ_HZ(CLK_HZ),

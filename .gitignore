@@ -1,8 +1,13 @@
-# Vivado
+# Vivado / XSim generated files
 *.jou
 *.log
-*.str
 *.wdb
+*.pb
+*.xdbg
+*.wdf
+*.str
+*.exe
+*.db
 *.wcfg
 *.xpr
 .Xil/
@@ -10,9 +15,9 @@
 .gen/
 .runs/
 .sim/
-*.tmp
-
-# Vivado project subfolders
+sim/**/audio_sim.cache/
+sim/**/audio_sim.sim/
+sim/**/*.ip_user_files/
 sim/**/.Xil/
 sim/**/.cache/
 sim/**/.gen/
@@ -21,16 +26,6 @@ sim/**/.sim/
 sim/**/*.wpc
 sim/**/*.lpr
 
-# Gowin
-*.fs
-impl/
-syn/
-pnr/
-*.log
-
-# OS / editor
-.DS_Store
-Thumbs.db
 # Gowin user/local files
 *.gprj.user
 *.gprj.bak
@@ -40,10 +35,12 @@ Thumbs.db
 *.bit
 *.bin
 *.jed
-*.log
 *.rpt
 *.tmp
 *.bak
+impl/
+syn/
+pnr/
 
 # Simulation generated files
 *.vcd
@@ -53,8 +50,8 @@ sim/work/
 work/
 obj_dir/
 
-# Editor/OS
-.vscode/
-.idea/
+# OS/editor
 .DS_Store
 Thumbs.db
+.vscode/
+.idea/
