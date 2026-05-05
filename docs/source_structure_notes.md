@@ -40,3 +40,21 @@ Nowy demonstrator `tang_audio_control_top` znajduje sie w `rtl/top/tang_audio_co
 Aktualnie kopie `tone_gen.v`, `i2s_tx.v` i `tang_audio_top.v` w `gowin_impl/tang_audio_hw/src/` zostaly zsynchronizowane z wersjami w `rtl/`.
 
 Top `tang_audio_eq_top` jest nowszym demonstratorem DAFX i powinien byc dodawany do Gowin razem z plikami wymienionymi w `docs/hardware_bringup_tang_audio_eq.md`.
+
+## Topy testowe i docelowy top pomiarowy
+
+W repozytorium istnieja topy testowe dla lokalnego generatora i EQ:
+
+- `rtl/top/tang_audio_top.v` - prosty tor testowy,
+- `rtl/top/tang_audio_control_top.v` - test przyciskow i glosnosci,
+- `rtl/top/tang_audio_eq_top.v` - test DAFX/EQ z lokalnym `test_mix_gen`.
+
+Nie usuwac tych topow. Sa przydatne do debugowania bez ADC/DAC.
+
+Docelowo dla toru pomiarowego potrzebny bedzie osobny top BYPASS ADC/DAC:
+
+```text
+PCM1808 -> i2s_rx_stereo -> audio_pipeline -> i2s_tx_stereo -> PCM5102A
+```
+
+Ten top nie powinien zgadywac pinow. Najpierw trzeba uzupelnic `docs/hardware_connections_todo.md` i plik `.cst` na podstawie faktycznego okablowania.

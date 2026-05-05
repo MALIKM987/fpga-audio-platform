@@ -15,10 +15,12 @@ volume_control L/R
    ->
 i2s_tx
    ->
-MAX98357A
+PCM5102A albo pomocniczy DAC I2S
 ```
 
 Na tym etapie zrodlo `test_mix_gen` jest mono i jest kopiowane na kanal L oraz R. Parametry korektora i glosnosci sa jednak oddzielne dla kanalu lewego i prawego.
+
+Aktualny EQ dziala na sygnale testowym generowanym lokalnie w FPGA. Docelowo wejsciem EQ maja byc probki z `i2s_rx_stereo` odbierane z PCM1808, a wyjsciem ma byc `i2s_tx_stereo` do PCM5102A.
 
 ## Dzialanie eq3band_simple
 
@@ -69,3 +71,5 @@ Zakresy pozostaja zgodne z bankiem rejestrow:
 8. Sprawdzic `led_left_active` i `led_right_active`.
 9. Sprawdzic `led_clip`.
 10. Po przypisaniu pinow przyciskow sprawdzic zmiane glosnosci i barwy.
+
+Docelowy test z sygnalem analogowym powinien uzyc toru PCM1808 -> FPGA -> PCM5102A opisanego w `docs/bypass_pipeline_plan.md`. Najpierw nalezy uruchomic BYPASS, a dopiero potem wlaczyc EQ.

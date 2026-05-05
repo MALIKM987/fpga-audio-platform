@@ -63,9 +63,34 @@ Co wymaga testu:
 - `sample_buffer`.
 - `spectral_processor` mnozacy biny zespolone przez gain.
 - Overlap-add.
-- Wejscie audio ADC/I2S.
+- Wejscie audio PCM1808/I2S.
+- Wyjscie audio PCM5102A/I2S w docelowym torze pomiarowym.
 - Dokladny zegar audio.
 - Fizyczne piny przyciskow.
+
+## Aktualizacja koncepcji hardware
+
+Projekt przechodzi z testow lokalnego generatora na docelowy stereofoniczny tor pomiarowy:
+
+```text
+generator funkcyjny
+    -> PCM1808 ADC stereo
+    -> Tang Nano 20K / FPGA
+    -> PCM5102A DAC stereo
+    -> oscyloskop
+```
+
+Glowny hardware docelowy to PCM1808 jako ADC stereo i PCM5102A jako DAC stereo. Wyjscie DAC jest traktowane jako wyjscie liniowe L/R do pomiaru oscyloskopem, bez wzmacniacza mocy i bez glosnikow.
+
+Pierwszym celem sprzetowym jest tryb BYPASS:
+
+```text
+PCM1808 -> i2s_rx_stereo -> audio_pipeline_bypass -> i2s_tx_stereo -> PCM5102A
+```
+
+Obecne topy z `tone_gen`, `test_mix_gen` i `tang_audio_eq_top` pozostaja jako tryby testowe/demonstracyjne. Sa przydatne do debugowania DSP bez ADC. Blok EQ/DAFX zostaje jako blok DSP do pozniejszego wlaczenia w `audio_pipeline`.
+
+FFT/IFFT nadal jest przyszlym etapem. `rtl/dsp/fft_ifft_accel_stub.v` pozostaje tylko stubem/interfejsem, a nie dzialajacym rdzeniem FFT/IFFT.
 
 ## Problem I2S i zegara 48 kHz
 
@@ -77,7 +102,7 @@ Obecny `i2s_tx` uzywa prostego dzielnika calkowitoliczbowego z zegara 27 MHz. Dl
 
 Prosty dzielnik calkowitoliczbowy moze dac niedokladna czestotliwosc BCLK/LRCK. TODO:
 
-- sprawdzic wymagania MAX98357A,
+- sprawdzic wymagania PCM5102A dla docelowego toru DAC,
 - przygotowac PLL albo dzielnik ulamkowy,
 - zweryfikowac rzeczywiste `I2S_BCLK`, `I2S_LRCK` i `I2S_DIN` na analizatorze logicznym.
 
@@ -130,9 +155,10 @@ Nie przypisano pinow przyciskow. Piny `btn_*`, `led_left_active`, `led_right_act
 
 ## Nastepny logiczny krok
 
-- Uruchomic `tang_audio_eq_top` na sprzecie.
-- Sprawdzic `I2S_BCLK`, `I2S_LRCK` i `I2S_DIN` na analizatorze logicznym.
-- Sprawdzic, czy przyciski zmieniaja `volume_L/R`.
-- Sprawdzic LED aktywnego kanalu L/R.
-- Dopiero potem zaczac `sample_buffer` i testowy FFT 64/128 punktow.
-- Nastepnie przejsc do `FFT_N = 512`.
+- Potwierdzic dokumentacje i tryb zegarow uzytych modulow PCM1808 oraz PCM5102A.
+- Przygotowac `i2s_rx_stereo` dla PCM1808.
+- Przygotowac `audio_pipeline_bypass`.
+- Przygotowac top BYPASS dla PCM1808 -> FPGA -> PCM5102A.
+- Sprawdzic BCLK/LRCK/DATA na analizatorze logicznym.
+- Dopiero po stabilnym BYPASS wlaczyc EQ/DAFX.
+- Dopiero pozniej zaczac `sample_buffer` i testowy FFT 64/128 punktow.
