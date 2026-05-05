@@ -1,12 +1,20 @@
-	imescale 1ns/1ps
+`timescale 1ns/1ps
 
+// Sanity test for tone_gen:
+// uses faster parameters and checks that the output toggles after reset.
 module tone_gen_tb;
 
     reg clk = 1'b0;
     reg rst = 1'b1;
-    wire [15:0] sample;
+    wire signed [15:0] sample;
+    reg signed [15:0] prev_sample;
+    integer sample_change_count;
+    integer errors;
 
-    tone_gen dut (
+    tone_gen #(
+        .CLK_FREQ_HZ(100),
+        .TONE_FREQ_HZ(10)
+    ) dut (
         .clk(clk),
         .rst(rst),
         .sample(sample)
@@ -14,11 +22,41 @@ module tone_gen_tb;
 
     always #10 clk = ~clk;
 
+    always @(posedge clk) begin
+        if (rst) begin
+            prev_sample <= sample;
+        end else begin
+            if (sample !== prev_sample)
+                sample_change_count = sample_change_count + 1;
+            prev_sample <= sample;
+        end
+    end
+
     initial begin
+        errors = 0;
+        sample_change_count = 0;
+        prev_sample = 16'sd0;
+
         #100;
+        if (sample !== 16'sd0) begin
+            $display("FAIL: sample is not zero during reset, sample=%0d", sample);
+            errors = errors + 1;
+        end
+
         rst = 1'b0;
 
         #2000;
+
+        if (sample_change_count < 2) begin
+            $display("FAIL: sample did not toggle enough, count=%0d", sample_change_count);
+            errors = errors + 1;
+        end
+
+        if (errors == 0)
+            $display("PASS: tone_gen_tb");
+        else
+            $display("FAIL: tone_gen_tb errors=%0d", errors);
+
         $finish;
     end
 

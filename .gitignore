@@ -31,3 +31,30 @@ pnr/
 # OS / editor
 .DS_Store
 Thumbs.db
+# Gowin user/local files
+*.gprj.user
+*.gprj.bak
+
+# Gowin/generated outputs
+*.fs
+*.bit
+*.bin
+*.jed
+*.log
+*.rpt
+*.tmp
+*.bak
+
+# Simulation generated files
+*.vcd
+*.fst
+*.ghw
+sim/work/
+work/
+obj_dir/
+
+# Editor/OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

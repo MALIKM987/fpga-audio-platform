@@ -1,0 +1,36 @@
+module tang_audio_top (
+    input  wire clk,
+    output wire I2S_BCLK,
+    output wire I2S_LRCK,
+    output wire I2S_DIN,
+    output wire PA_SD,
+    output wire led
+);
+
+    wire signed [15:0] sample;
+
+    assign PA_SD = 1'b1;
+    assign led   = sample[15];   // <<<<<< TU
+
+    tone_gen u_tone_gen (
+        .clk(clk),
+        .rst(1'b0),
+        .sample(sample)
+    );
+
+    i2s_tx #(
+        .CLK_FREQ_HZ(27_000_000),
+        .SAMPLE_RATE_HZ(48_000),
+        .SAMPLE_WIDTH(16)
+    ) u_i2s_tx (
+        .clk(clk),
+        .rst(1'b0),
+        .sample_in(sample),
+        .sample_left(sample),
+        .sample_right(sample),
+        .bclk(I2S_BCLK),
+        .lrck(I2S_LRCK),
+        .sdata(I2S_DIN)
+    );
+
+endmodule

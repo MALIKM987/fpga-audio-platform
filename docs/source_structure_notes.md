@@ -1,0 +1,31 @@
+# Struktura zrodel RTL
+
+## Canonical source
+
+Katalog `rtl/` jest glownym zrodlem prawdy dla kodu RTL projektu. Nowe moduly nalezy dodawac do:
+
+- `rtl/audio/` dla blokow toru audio, takich jak `tone_gen` i `i2s_tx`,
+- `rtl/common/` dla malych blokow wspolnych, takich jak synchronizatory i debounce,
+- `rtl/control/` dla logiki sterowania przyciskami i rejestrow parametrow,
+- `rtl/dsp/` dla blokow przetwarzania sygnalu,
+- `rtl/top/` dla top-leveli demonstracyjnych i sprzetowych.
+
+## Pliki Gowin
+
+Katalog `gowin_impl/tang_audio_hw/` jest katalogiem projektu narzedziowego Gowin. Pliki w `gowin_impl/tang_audio_hw/src/` sa kopia pomocnicza albo plikami constraints uzywanymi przez projekt Gowin. Nie powinny byc traktowane jako glowny punkt edycji logiki RTL.
+
+W tym repozytorium wykryto zdublowane moduly:
+
+- `rtl/audio/tone_gen.v` oraz `gowin_impl/tang_audio_hw/src/tone_gen.v`,
+- `rtl/audio/i2s_tx.v` oraz `gowin_impl/tang_audio_hw/src/i2s_tx.v`,
+- `rtl/top/tang_audio_top.v` oraz `gowin_impl/tang_audio_hw/src/tang_audio_top.v`.
+
+Wersje w `rtl/` sa traktowane jako canonical source. Kopie w `gowin_impl/tang_audio_hw/src/` powinny byc synchronizowane z `rtl/`, jesli projekt Gowin nadal odwoluje sie do katalogu `src/`.
+
+## Jak uniknac rozjazdu wersji
+
+Najczystsze rozwiazanie to skonfigurowac projekt Gowin tak, aby bezposrednio uzywal plikow z `rtl/`. Alternatywnie mozna utrzymac kopie w `gowin_impl/tang_audio_hw/src/`, ale wtedy po kazdej zmianie RTL trzeba zsynchronizowac odpowiednie pliki przed budowa bitstreamu.
+
+Nie nalezy edytowac rownolegle obu kopii tego samego modulu. Zmiane najpierw wykonuje sie w `rtl/`, a dopiero potem przenosi do `gowin_impl/tang_audio_hw/src/`, jesli projekt narzedziowy tego wymaga.
+
+Nowy demonstrator `tang_audio_control_top` znajduje sie w `rtl/top/tang_audio_control_top.v`. Do uruchomienia go w Gowin trzeba dodac ten plik i jego zaleznosci RTL do projektu oraz uzupelnic constraints dla nowych przyciskow i LED.
