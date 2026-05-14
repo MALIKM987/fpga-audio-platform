@@ -1,14 +1,11 @@
 module i2s_tx #(
     parameter integer CLK_FREQ_HZ    = 27_000_000,
     parameter integer SAMPLE_RATE_HZ = 48_000,
-    parameter integer SAMPLE_WIDTH   = 16,
-    parameter integer USE_STEREO_INPUTS = 0
+    parameter integer SAMPLE_WIDTH   = 16
 )(
     input  wire                         clk,
     input  wire                         rst,
     input  wire signed [SAMPLE_WIDTH-1:0] sample_in,
-    input  wire signed [SAMPLE_WIDTH-1:0] sample_left,
-    input  wire signed [SAMPLE_WIDTH-1:0] sample_right,
 
     output reg                          bclk,
     output reg                          lrck,
@@ -21,11 +18,6 @@ module i2s_tx #(
     reg [31:0] bclk_div_cnt;
     reg [5:0]  bit_cnt;
     reg signed [SAMPLE_WIDTH-1:0] shreg;
-    wire signed [SAMPLE_WIDTH-1:0] selected_left;
-    wire signed [SAMPLE_WIDTH-1:0] selected_right;
-
-    assign selected_left  = (USE_STEREO_INPUTS != 0) ? sample_left  : sample_in;
-    assign selected_right = (USE_STEREO_INPUTS != 0) ? sample_right : sample_in;
 
     always @(posedge clk) begin
         if (rst) begin
@@ -42,8 +34,8 @@ module i2s_tx #(
 
                 if (bclk == 1'b0) begin
                     if (bit_cnt == 0) begin
-                        shreg <= selected_left;
-                        sdata <= selected_left[SAMPLE_WIDTH-1];
+                        shreg <= sample_in;
+                        sdata <= sample_in[SAMPLE_WIDTH-1];
                         bit_cnt <= bit_cnt + 1'b1;
                     end else if (bit_cnt < SAMPLE_WIDTH) begin
                         shreg <= {shreg[SAMPLE_WIDTH-2:0], 1'b0};
@@ -51,13 +43,8 @@ module i2s_tx #(
                         bit_cnt <= bit_cnt + 1'b1;
                     end else if (bit_cnt == SAMPLE_WIDTH) begin
                         lrck <= ~lrck;
-                        if (lrck == 1'b0) begin
-                            shreg <= selected_right;
-                            sdata <= selected_right[SAMPLE_WIDTH-1];
-                        end else begin
-                            shreg <= selected_left;
-                            sdata <= selected_left[SAMPLE_WIDTH-1];
-                        end
+                        shreg <= sample_in;
+                        sdata <= sample_in[SAMPLE_WIDTH-1];
                         bit_cnt <= 6'd1;
                     end
                 end

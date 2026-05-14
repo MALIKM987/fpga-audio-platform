@@ -7,7 +7,7 @@ module tang_audio_top (
     output wire led
 );
 
-    wire signed [15:0] sample;
+    wire [15:0] sample;
 
     assign PA_SD = 1'b1;
     assign led   = sample[15];   // <<<<<< TU
@@ -26,8 +26,6 @@ module tang_audio_top (
         .clk(clk),
         .rst(1'b0),
         .sample_in(sample),
-        .sample_left(sample),
-        .sample_right(sample),
         .bclk(I2S_BCLK),
         .lrck(I2S_LRCK),
         .sdata(I2S_DIN)

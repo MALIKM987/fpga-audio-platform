@@ -7,10 +7,15 @@ module tang_audio_top (
     output wire led
 );
 
-    wire signed [15:0] sample;
+    wire [15:0] sample;
+    reg  [25:0] cnt = 26'd0;
+
+    always @(posedge clk) begin
+        cnt <= cnt + 1'b1;
+    end
 
     assign PA_SD = 1'b1;
-    assign led   = sample[15];   // <<<<<< TU
+    assign led   = cnt[25];   // debug: heartbeat
 
     tone_gen u_tone_gen (
         .clk(clk),
@@ -26,8 +31,6 @@ module tang_audio_top (
         .clk(clk),
         .rst(1'b0),
         .sample_in(sample),
-        .sample_left(sample),
-        .sample_right(sample),
         .bclk(I2S_BCLK),
         .lrck(I2S_LRCK),
         .sdata(I2S_DIN)

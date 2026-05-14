@@ -6,7 +6,7 @@ module audio_tx_top (
     output wire sdata
 );
 
-    wire signed [15:0] sample;
+    wire [15:0] sample;
 
     tone_gen u_tone_gen (
         .clk(clk),
@@ -22,8 +22,6 @@ module audio_tx_top (
         .clk(clk),
         .rst(rst),
         .sample_in(sample),
-        .sample_left(sample),
-        .sample_right(sample),
         .bclk(bclk),
         .lrck(lrck),
         .sdata(sdata)
