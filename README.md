@@ -62,6 +62,7 @@ Niezaimplementowane jeszcze:
 
 ## Tryby pracy
 
+- `SELFTEST` - diagnostyka bez sprzetu zewnetrznego, z wewnetrznym generatorem probek, automatyczna zmiana parametrow, modulacja i raport przez UART TX.
 - `TEST_TONE` / `TEST_MIX` - sygnal generowany lokalnie w FPGA, bez ADC.
 - `BYPASS` - probki z PCM1808 przechodza bez zmian do PCM5102A. To jest najblizszy priorytet sprzetowy.
 - `EQ_DAFX` - probki przechodza przez korektor bass/mid/treble.
@@ -89,6 +90,64 @@ PCM1808
 ```
 
 Dopiero po stabilnym BYPASS nalezy wlaczac EQ/DAFX, a pozniej przechodzic do FFT/IFFT.
+
+## Self-test bez sprzetu zewnetrznego
+
+Tryb `SELFTEST` jest pierwszym bezpiecznym etapem diagnostycznym uruchamianym tylko na plytce Tang Nano 20K podlaczonej do komputera przez USB. Nie wymaga generatora funkcyjnego, ADC, DAC, kodeka, przyciskow ani dodatkowego toru audio.
+
+Tor logiczny trybu self-test:
+
+```text
+test_signal_gen
+    -> auto_param_controller
+    -> modulation_core
+    -> debug_analyzer
+    -> uart_debug_formatter
+    -> uart_tx
+```
+
+`test_signal_gen` generuje signed 16-bit probki testowe wewnatrz FPGA. `auto_param_controller` cyklicznie zmienia tryby:
+
+- `MODE=0`: normal, `VOL=8`, `BASS=0`, `MID=0`, `TREBLE=0`.
+- `MODE=1`: bass boost.
+- `MODE=2`: mid boost.
+- `MODE=3`: treble boost.
+- `MODE=4`: glosniej / clipping test.
+
+`modulation_core` wykonuje uproszczone przetwarzanie w dziedzinie czasu. Nie uzywa FFT/IFFT. Rdzen rozdziela probke na proste komponenty bass/mid/treble, mnozy je przez gain Q2.14, naklada volume i saturuje wynik do signed 16-bit. Sygnal `clip` wskazuje przekroczenie zakresu.
+
+`debug_analyzer` zbiera minimum i maksimum wejscia oraz wyjscia w oknie probek. `uart_debug_formatter` wysyla tekst diagnostyczny przez `uart_tx`. UART nie przesyla pelnego audio, tylko okresowe raporty tekstowe, np.:
+
+```text
+TANG AUDIO SELFTEST START
+MODE=0 VOL=08 BASS=+0 MID=+0 TREBLE=+0 IN_MIN=0xC180 IN_MAX=0x3E7F OUT_MIN=0xC180 OUT_MAX=0x3E7F CLIP=0
+```
+
+Wartosci `IN_MIN`, `IN_MAX`, `OUT_MIN` i `OUT_MAX` sa wypisywane szesnastkowo jako 16-bit two's complement.
+
+Top trybu diagnostycznego:
+
+```text
+rtl/top/tang_audio_selftest_top.v
+```
+
+Porty diagnostyczne:
+
+- `uart_tx` - wyjscie nadajnika UART 8N1.
+- `led_heartbeat` - proste potwierdzenie pracy logiki.
+- `led_clip` - sygnal clippingu.
+- `led_mode[2:0]` - aktualny tryb automatyczny.
+
+Nie zakladamy, ze samo USB programatora Tang Nano 20K automatycznie udostepnia UART z FPGA jako port COM. Jezeli Windows nie pokazuje odpowiedniego portu COM albo dokumentacja plytki nie potwierdza polaczenia UART, nalezy potraktowac `uart_tx` jako osobny pin FPGA. Do fizycznego odbioru moze byc potrzebny zewnetrzny konwerter USB-UART 3.3 V oraz potwierdzone przypisanie pinu TX w constraints. Nie nalezy podlaczac 5 V do pinow FPGA.
+
+Symulacje self-testu sa opisane w `docs/simulation_notes.md`. Przyklad dla Icarus Verilog:
+
+```powershell
+iverilog -g2001 -o sim/tang_audio_selftest_top_tb.vvp rtl/debug/test_signal_gen.v rtl/debug/auto_param_controller.v rtl/dsp/gain_lut_q2_14.v rtl/dsp/volume_lut_q2_14.v rtl/dsp/modulation_core.v rtl/debug/debug_analyzer.v rtl/debug/uart_debug_formatter.v rtl/uart/uart_tx.v rtl/top/tang_audio_selftest_top.v tb/tang_audio_selftest_top_tb.v
+vvp sim/tang_audio_selftest_top_tb.vvp
+```
+
+Aby uruchomic na Tang Nano w Gowin EDA, nalezy dodac nowe pliki RTL do projektu, ustawic top `tang_audio_selftest_top`, przypisac potwierdzone piny `clk`, `rst`, `uart_tx` i opcjonalnych LED-ow, a nastepnie zaprogramowac plytke. Po zaprogramowaniu nalezy sprawdzic w Menedzerze urzadzen Windows, czy widoczny jest port COM. Jesli nie ma pewnego portu COM z plytki, uzyc zewnetrznego USB-UART 3.3 V podlaczonego do potwierdzonego pinu `uart_tx`.
 
 ## Sterowanie
 
@@ -120,8 +179,10 @@ W obecnym trybie demonstracyjnym EQ dziala na sygnale testowym z FPGA. Docelowo 
 rtl/audio    - bloki toru audio, obecne I2S TX i przyszle I2S RX
 rtl/common   - bloki wspolne, np. synchronizacja i debounce
 rtl/control  - sterowanie przyciskami i rejestry parametrow
+rtl/debug    - generatory i diagnostyka self-test
 rtl/dsp      - bloki DSP, EQ, gain/volume i stub FFT/IFFT
 rtl/top      - top-level projektu i demonstratory
+rtl/uart     - proste interfejsy UART do diagnostyki
 tb           - testbenche symulacyjne
 docs         - dokumentacja projektu
 gowin_impl   - projekt narzedziowy Gowin

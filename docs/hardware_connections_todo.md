@@ -31,3 +31,14 @@ Nie wpisywac konkretnych numerow pinow FPGA bez potwierdzenia polaczen i dokumen
 | `led_clipping` | output | LED | TODO | do przypisania |
 | `led_left_active` | output | LED | TODO | do przypisania |
 | `led_right_active` | output | LED | TODO | do przypisania |
+
+## SELFTEST / UART diagnostyczny
+
+| Sygnal | Kierunek wzgledem FPGA | Modul | Pin FPGA | Status |
+| --- | --- | --- | --- | --- |
+| `uart_tx` | output | self-test UART | TODO | pin trzeba potwierdzic przed odbiorem przez USB-UART |
+| `led_heartbeat` | output | LED | TODO | opcjonalny wskaznik pracy |
+| `led_clip` | output | LED | TODO | opcjonalny wskaznik clippingu |
+| `led_mode[2:0]` | output | LED | TODO | opcjonalny wskaznik trybu |
+
+Nie wpisywac numerow pinow bez potwierdzenia schematu, dokumentacji modulu i faktycznego okablowania.

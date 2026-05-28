@@ -7,8 +7,10 @@ Katalog `rtl/` jest glownym zrodlem prawdy dla kodu RTL projektu. Nowe moduly na
 - `rtl/audio/` dla blokow toru audio, takich jak `tone_gen` i `i2s_tx`,
 - `rtl/common/` dla malych blokow wspolnych, takich jak synchronizatory i debounce,
 - `rtl/control/` dla logiki sterowania przyciskami i rejestrow parametrow,
+- `rtl/debug/` dla self-testu, analizatorow i formatowania diagnostyki,
 - `rtl/dsp/` dla blokow przetwarzania sygnalu,
-- `rtl/top/` dla top-leveli demonstracyjnych i sprzetowych.
+- `rtl/top/` dla top-leveli demonstracyjnych i sprzetowych,
+- `rtl/uart/` dla prostych interfejsow UART do diagnostyki.
 
 ## Pliki Gowin
 
@@ -47,7 +49,8 @@ W repozytorium istnieja topy testowe dla lokalnego generatora i EQ:
 
 - `rtl/top/tang_audio_top.v` - prosty tor testowy,
 - `rtl/top/tang_audio_control_top.v` - test przyciskow i glosnosci,
-- `rtl/top/tang_audio_eq_top.v` - test DAFX/EQ z lokalnym `test_mix_gen`.
+- `rtl/top/tang_audio_eq_top.v` - test DAFX/EQ z lokalnym `test_mix_gen`,
+- `rtl/top/tang_audio_selftest_top.v` - diagnostyka bez sprzetu zewnetrznego, z raportem UART.
 
 Nie usuwac tych topow. Sa przydatne do debugowania bez ADC/DAC.
 

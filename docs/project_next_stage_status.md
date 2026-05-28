@@ -92,6 +92,33 @@ Obecne topy z `tone_gen`, `test_mix_gen` i `tang_audio_eq_top` pozostaja jako tr
 
 FFT/IFFT nadal jest przyszlym etapem. `rtl/dsp/fft_ifft_accel_stub.v` pozostaje tylko stubem/interfejsem, a nie dzialajacym rdzeniem FFT/IFFT.
 
+## Etap: SELFTEST bez sprzetu zewnetrznego
+
+Dodano osobny tryb diagnostyczny, ktory mozna symulowac i pozniej uruchomic na samej plytce Tang Nano 20K bez ADC, DAC, generatora funkcyjnego, przyciskow ani zewnetrznego toru audio.
+
+Tor self-test:
+
+```text
+test_signal_gen
+    -> auto_param_controller
+    -> modulation_core
+    -> debug_analyzer
+    -> uart_debug_formatter
+    -> uart_tx
+```
+
+Nowe bloki:
+
+- `rtl/debug/test_signal_gen.v` - generuje signed 16-bit probki testowe.
+- `rtl/debug/auto_param_controller.v` - automatycznie zmienia tryby normal/bass/mid/treble/clipping.
+- `rtl/dsp/modulation_core.v` - wykonuje uproszczona modulacje bass/mid/treble + volume z saturacja.
+- `rtl/debug/debug_analyzer.v` - mierzy min/max wejscia i wyjscia oraz clipping w oknie probek.
+- `rtl/debug/uart_debug_formatter.v` - formatuje raport tekstowy.
+- `rtl/uart/uart_tx.v` - nadajnik UART 8N1.
+- `rtl/top/tang_audio_selftest_top.v` - osobny top diagnostyczny.
+
+Ten etap nie implementuje FFT/IFFT i nie wymaga sprzetu audio. UART sluzy tylko do raportow diagnostycznych, nie do przesylania probek audio. Nie ma pewnosci, ze USB programatora Tang Nano 20K udostepnia UART FPGA jako port COM; do realnego odbioru moze byc potrzebny potwierdzony pin `uart_tx` oraz zewnetrzny konwerter USB-UART 3.3 V.
+
 ## Problem I2S i zegara 48 kHz
 
 Obecny `i2s_tx` uzywa prostego dzielnika calkowitoliczbowego z zegara 27 MHz. Dla 48 kHz i 16 bitow stereo docelowy BCLK wynosi:
