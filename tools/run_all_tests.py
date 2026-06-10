@@ -21,6 +21,20 @@ TESTS = [
         ],
     },
     {
+        "name": "fft_accelerator_core",
+        "sources": [
+            "rtl/control/fft_control_regs.v",
+            "rtl/dsp/sample_block_buffer.v",
+            "rtl/dsp/spectral_gain_select.v",
+            "rtl/dsp/spectral_processor.v",
+            "rtl/dsp/fft_accel_wrapper.v",
+            "rtl/dsp/ifft_accel_wrapper.v",
+            "rtl/dsp/fft_ifft_pipeline.v",
+            "rtl/control/fft_accelerator_core.v",
+            "tb/fft_accelerator_core_tb.v",
+        ],
+    },
+    {
         "name": "spectral_processor",
         "sources": [
             "rtl/dsp/spectral_gain_select.v",

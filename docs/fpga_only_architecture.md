@@ -92,6 +92,8 @@ Zaimplementowane moduły dla architektury FPGA-only FFT/IFFT:
 - `rtl/dsp/ifft_accel_wrapper.v` jako model passthrough interfejsu IFFT.
 - `rtl/dsp/fft_ifft_pipeline.v` jako model integracyjny pipeline.
 - `rtl/control/fft_control_regs.v` jako bank rejestrów CONTROL/STATUS/PARAM.
+- `rtl/control/fft_accelerator_core.v` jako nadrzędny model akceleratora
+  sterowany rejestrami.
 - `tools/run_all_tests.py` jako runner podstawowych testów Verilog.
 
 Moduły nadal oznaczone jako TODO:
@@ -109,7 +111,9 @@ pasma, biny lustrzane i mnożenie zespolonych wartości przez gain Q2.14.
 Wrappery FFT/IFFT i `fft_ifft_pipeline` mają testbenche modelowe, które
 sprawdzają kolejność ramek oraz przepływ danych. `fft_control_regs` ma testbench
 dla domyślnych parametrów, zapisu gainów, impulsu start, zatrzasków statusu i
-czyszczenia statusu. Kolejne moduły powinny być dodawane etapami; każdy nowy
+czyszczenia statusu. `fft_accelerator_core` łączy bank rejestrów z modelem
+pipeline i testuje scenariusz CONTROL.START -> próbki wejściowe -> pipeline
+done -> STATUS.DONE. Kolejne moduły powinny być dodawane etapami; każdy nowy
 moduł Verilog powinien mieć własny testbench albo być pokryty testbenchem
 wyższego poziomu.
 
@@ -150,6 +154,9 @@ Obecny moduł `fft_control_regs` realizuje pierwszy krok tej warstwy: rejestry
 CONTROL, STATUS, gainy BASS/MID/TREBLE, wybór testu i rejestr DEBUG. Interfejs
 jest prosty (`wr_en`, `rd_en`, adres i dane), niezależny od konkretnej magistrali
 i może później zostać podłączony do UART, przycisków albo AXI-like bridge.
+`fft_accelerator_core` używa tego interfejsu jako warstwy sterowania dla
+`fft_ifft_pipeline`, ale nadal nie implementuje AXI-Lite, UART ani fizycznego
+I2S.
 
 ## Spectral Processor
 

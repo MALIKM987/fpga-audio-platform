@@ -49,6 +49,8 @@ Moduły nowego kierunku zaimplementowane w obecnym etapie:
 - `rtl/dsp/ifft_accel_wrapper.v` jako model passthrough interfejsu IFFT.
 - `rtl/dsp/fft_ifft_pipeline.v` jako model integracyjny przepływu danych.
 - `rtl/control/fft_control_regs.v` jako bank rejestrów CONTROL/STATUS/PARAM.
+- `rtl/control/fft_accelerator_core.v` jako moduł nadrzędny akceleratora
+  sterowany rejestrami.
 - `tools/run_all_tests.py` jako podstawowy runner testów Verilog.
 
 Moduły nadal oznaczone jako TODO:
@@ -67,7 +69,9 @@ modelami passthrough, a `fft_ifft_pipeline` sprawdza sterowanie, indeksy i
 przepływ danych przez cały tor. Nie potwierdza to jeszcze matematycznej
 poprawności FFT/IFFT. `fft_control_regs` dodaje prosty interfejs rejestrowy
 CONTROL/STATUS/PARAM podobny metodologicznie do AXI-Lite, ale niezależny od
-konkretnej magistrali.
+konkretnej magistrali. `fft_accelerator_core` łączy ten bank rejestrów z
+modelem pipeline, tak że zapis bitu START w CONTROL uruchamia przetwarzanie,
+a STATUS pokazuje busy/done/overflow/error.
 
 ## Aktywny self-test
 
@@ -156,6 +160,8 @@ Zaimplementowane:
   `sample_block_buffer -> fft_accel_wrapper -> spectral_processor -> ifft_accel_wrapper`.
 - `fft_control_regs` jako rejestrowy interfejs sterujący z CONTROL, STATUS,
   gainami i wyborem testu.
+- `fft_accelerator_core` jako nadrzędny model akceleratora:
+  rejestry sterujące + `fft_ifft_pipeline`.
 - `tools/run_all_tests.py` jako runner podstawowych testbenchy Verilog.
 
 Niezaimplementowane jeszcze:

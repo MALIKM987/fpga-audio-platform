@@ -1,0 +1,299 @@
+`timescale 1ns/1ps
+
+module fft_accelerator_core_tb;
+
+    localparam integer FFT_SIZE     = 256;
+    localparam integer SAMPLE_WIDTH = 16;
+    localparam integer ADDR_WIDTH   = 4;
+    localparam integer DATA_WIDTH   = 32;
+    localparam integer GAIN_WIDTH   = 16;
+
+    localparam [ADDR_WIDTH-1:0] CONTROL_REG     = 4'h0;
+    localparam [ADDR_WIDTH-1:0] STATUS_REG      = 4'h1;
+    localparam [ADDR_WIDTH-1:0] BASS_GAIN_REG   = 4'h2;
+    localparam [ADDR_WIDTH-1:0] MID_GAIN_REG    = 4'h3;
+    localparam [ADDR_WIDTH-1:0] TREBLE_GAIN_REG = 4'h4;
+
+    localparam signed [GAIN_WIDTH-1:0] GAIN_0_75 = 16'sd12288;
+    localparam signed [GAIN_WIDTH-1:0] GAIN_1_00 = 16'sd16384;
+    localparam signed [GAIN_WIDTH-1:0] GAIN_1_50 = 16'sd24576;
+
+    reg clk = 1'b0;
+    reg rst = 1'b1;
+    reg wr_en = 1'b0;
+    reg [ADDR_WIDTH-1:0] wr_addr = {ADDR_WIDTH{1'b0}};
+    reg [DATA_WIDTH-1:0] wr_data = {DATA_WIDTH{1'b0}};
+    reg rd_en = 1'b0;
+    reg [ADDR_WIDTH-1:0] rd_addr = {ADDR_WIDTH{1'b0}};
+    reg sample_valid = 1'b0;
+    reg signed [SAMPLE_WIDTH-1:0] sample_in = 16'sd0;
+
+    wire [DATA_WIDTH-1:0] rd_data;
+    wire out_valid;
+    wire [7:0] out_index;
+    wire signed [SAMPLE_WIDTH-1:0] sample_out;
+    wire busy;
+    wire done;
+    wire overflow;
+
+    integer errors = 0;
+    integer i;
+    integer timeout_count = 0;
+    integer output_count = 0;
+    integer collect_ok = 1;
+    integer pipeline_done_ok = 0;
+    integer output_count_ok = 0;
+    integer output_order_ok = 1;
+    integer overflow_ok = 1;
+    integer bass_gain_path_ok = 0;
+    integer mid_gain_path_ok = 0;
+    integer treble_gain_path_ok = 0;
+    reg [DATA_WIDTH-1:0] read_value;
+
+    fft_accelerator_core #(
+        .FFT_SIZE(FFT_SIZE),
+        .SAMPLE_WIDTH(SAMPLE_WIDTH),
+        .ADDR_WIDTH(ADDR_WIDTH),
+        .DATA_WIDTH(DATA_WIDTH),
+        .GAIN_WIDTH(GAIN_WIDTH)
+    ) dut (
+        .clk(clk),
+        .rst(rst),
+        .wr_en(wr_en),
+        .wr_addr(wr_addr),
+        .wr_data(wr_data),
+        .rd_en(rd_en),
+        .rd_addr(rd_addr),
+        .rd_data(rd_data),
+        .sample_valid(sample_valid),
+        .sample_in(sample_in),
+        .out_valid(out_valid),
+        .out_index(out_index),
+        .sample_out(sample_out),
+        .busy(busy),
+        .done(done),
+        .overflow(overflow)
+    );
+
+    always #5 clk = ~clk;
+
+    task report_result;
+        input [8*32-1:0] name;
+        input pass;
+        begin
+            if (pass) begin
+                $display("TEST %0s PASS", name);
+            end else begin
+                $display("TEST %0s FAIL", name);
+                errors = errors + 1;
+            end
+        end
+    endtask
+
+    task write_reg;
+        input [ADDR_WIDTH-1:0] addr;
+        input [DATA_WIDTH-1:0] data;
+        begin
+            @(negedge clk);
+            wr_en = 1'b1;
+            wr_addr = addr;
+            wr_data = data;
+
+            @(posedge clk);
+            #1;
+
+            @(negedge clk);
+            wr_en = 1'b0;
+            wr_addr = {ADDR_WIDTH{1'b0}};
+            wr_data = {DATA_WIDTH{1'b0}};
+        end
+    endtask
+
+    task read_reg;
+        input [ADDR_WIDTH-1:0] addr;
+        output [DATA_WIDTH-1:0] data;
+        begin
+            @(negedge clk);
+            rd_en = 1'b1;
+            rd_addr = addr;
+
+            @(posedge clk);
+            #1;
+            data = rd_data;
+
+            @(negedge clk);
+            rd_en = 1'b0;
+            rd_addr = {ADDR_WIDTH{1'b0}};
+        end
+    endtask
+
+    function signed [SAMPLE_WIDTH-1:0] expected_output;
+        input integer index;
+        integer effective_bin;
+        begin
+            if (index <= FFT_SIZE / 2) begin
+                effective_bin = index;
+            end else begin
+                effective_bin = FFT_SIZE - index;
+            end
+
+            if (effective_bin <= 1) begin
+                expected_output = 16'sd1500;
+            end else if (effective_bin <= 21) begin
+                expected_output = 16'sd1000;
+            end else begin
+                expected_output = 16'sd750;
+            end
+        end
+    endfunction
+
+    initial begin
+        $display("=== FFT ACCELERATOR CORE TEST ===");
+        $display("");
+
+        repeat (3) @(posedge clk);
+        #1;
+        report_result("reset",
+                      (busy === 1'b0) &&
+                      (done === 1'b0) &&
+                      (overflow === 1'b0) &&
+                      (out_valid === 1'b0));
+
+        @(negedge clk);
+        rst = 1'b0;
+
+        read_reg(BASS_GAIN_REG, read_value);
+        if (read_value !== {16'h0000, GAIN_1_00}) begin
+            report_result("default_gains", 0);
+        end else begin
+            read_reg(MID_GAIN_REG, read_value);
+            if (read_value !== {16'h0000, GAIN_1_00}) begin
+                report_result("default_gains", 0);
+            end else begin
+                read_reg(TREBLE_GAIN_REG, read_value);
+                report_result("default_gains", read_value === {16'h0000, GAIN_1_00});
+            end
+        end
+
+        write_reg(BASS_GAIN_REG, {16'h0000, GAIN_1_50});
+        write_reg(MID_GAIN_REG, {16'h0000, GAIN_1_00});
+        write_reg(TREBLE_GAIN_REG, {16'h0000, GAIN_0_75});
+
+        read_reg(BASS_GAIN_REG, read_value);
+        if (read_value !== {16'h0000, GAIN_1_50}) begin
+            report_result("write_gains", 0);
+        end else begin
+            read_reg(MID_GAIN_REG, read_value);
+            if (read_value !== {16'h0000, GAIN_1_00}) begin
+                report_result("write_gains", 0);
+            end else begin
+                read_reg(TREBLE_GAIN_REG, read_value);
+                report_result("write_gains", read_value === {16'h0000, GAIN_0_75});
+            end
+        end
+
+        write_reg(CONTROL_REG, 32'h00000005);
+        @(posedge clk);
+        #1;
+        read_reg(STATUS_REG, read_value);
+        report_result("control_start", read_value[0] === 1'b1);
+
+        for (i = 0; i < FFT_SIZE; i = i + 1) begin
+            @(negedge clk);
+            sample_valid = 1'b1;
+            sample_in = 16'sd1000;
+
+            @(posedge clk);
+            #1;
+
+            if (overflow) begin
+                collect_ok = 0;
+                overflow_ok = 0;
+                $display("  overflow error while collecting sample %0d", i);
+            end
+        end
+
+        @(negedge clk);
+        sample_valid = 1'b0;
+        sample_in = 16'sd0;
+
+        while (!pipeline_done_ok && timeout_count < 3000) begin
+            @(posedge clk);
+            #1;
+            timeout_count = timeout_count + 1;
+
+            if (overflow) begin
+                overflow_ok = 0;
+            end
+
+            if (out_valid) begin
+                if (out_index !== output_count[7:0]) begin
+                    output_order_ok = 0;
+                    $display("  order error: out_index=%0d expected=%0d",
+                             out_index, output_count);
+                end
+
+                if (sample_out !== expected_output(output_count)) begin
+                    output_order_ok = 0;
+                    $display("  data error at index %0d sample_out=%0d expected=%0d",
+                             output_count, sample_out, expected_output(output_count));
+                end
+
+                if ((out_index == 8'd1) && (sample_out === 16'sd1500)) begin
+                    bass_gain_path_ok = 1;
+                end
+
+                if ((out_index == 8'd10) && (sample_out === 16'sd1000)) begin
+                    mid_gain_path_ok = 1;
+                end
+
+                if ((out_index == 8'd40) && (sample_out === 16'sd750)) begin
+                    treble_gain_path_ok = 1;
+                end
+
+                output_count = output_count + 1;
+            end
+
+            if (done) begin
+                pipeline_done_ok = 1;
+            end
+        end
+
+        output_count_ok = (output_count == FFT_SIZE);
+
+        report_result("collect_samples", collect_ok);
+        report_result("pipeline_done", pipeline_done_ok);
+        report_result("output_count", output_count_ok);
+        report_result("output_order", output_order_ok);
+        report_result("gain_path",
+                      bass_gain_path_ok &&
+                      mid_gain_path_ok &&
+                      treble_gain_path_ok);
+        report_result("overflow", overflow_ok);
+
+        @(posedge clk);
+        #1;
+        read_reg(STATUS_REG, read_value);
+        report_result("status_done_latched",
+                      (read_value[1] === 1'b1) &&
+                      (read_value[2] === 1'b0) &&
+                      (read_value[3] === 1'b0));
+
+        write_reg(CONTROL_REG, 32'h0000000C);
+        read_reg(STATUS_REG, read_value);
+        report_result("clear_status",
+                      (read_value[1] === 1'b0) &&
+                      (read_value[2] === 1'b0) &&
+                      (read_value[3] === 1'b0));
+
+        $display("");
+        if (errors == 0) begin
+            $display("STATUS=PASS");
+        end else begin
+            $display("STATUS=FAIL errors=%0d", errors);
+        end
+
+        $finish;
+    end
+
+endmodule
