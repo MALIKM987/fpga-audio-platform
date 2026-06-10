@@ -19,6 +19,13 @@ PYTHON_TESTS = [
     },
 ]
 
+VECTOR_TESTS = [
+    {
+        "name": "fft_test_vectors",
+        "command": [sys.executable, "tools/generate_fft_test_vectors.py"],
+    },
+]
+
 VERILOG_TESTS = [
     {
         "name": "fft_control_regs",
@@ -84,6 +91,14 @@ VERILOG_TESTS = [
     },
 ]
 
+COMPARISON_TESTS = [
+    {
+        "name": "fft_pipeline_output_comparison",
+        "command": [sys.executable, "tools/compare_fft_pipeline_outputs.py"],
+        "allow_skipped": True,
+    },
+]
+
 
 def print_tool_status(tool_name: str, tool_path: str | None) -> None:
     status = "FOUND" if tool_path else "NOT FOUND"
@@ -101,20 +116,26 @@ def run_command(command: list[str]) -> subprocess.CompletedProcess[str]:
     )
 
 
-def run_python_test(test: dict[str, object]) -> bool:
+def run_python_tool(test: dict[str, object]) -> str:
     name = str(test["name"])
     command = [str(part) for part in test["command"]]
+    allow_skipped = bool(test.get("allow_skipped", False))
     result = run_command(command)
     output = result.stdout.rstrip()
     pass_marker = "STATUS=PASS" in result.stdout
     fail_marker = "STATUS=FAIL" in result.stdout
+    skipped_marker = "STATUS=SKIPPED" in result.stdout
 
     if output:
         print(output)
 
     if result.returncode == 0 and pass_marker and not fail_marker:
         print(f"TEST {name} PASS")
-        return True
+        return "PASS"
+
+    if result.returncode == 0 and skipped_marker and allow_skipped and not fail_marker:
+        print(f"TEST {name} SKIPPED")
+        return "SKIPPED"
 
     print(f"TEST {name} FAIL")
     if result.returncode != 0:
@@ -123,7 +144,9 @@ def run_python_test(test: dict[str, object]) -> bool:
         print("  missing STATUS=PASS marker")
     if fail_marker:
         print("  STATUS=FAIL marker found")
-    return False
+    if skipped_marker and not allow_skipped:
+        print("  STATUS=SKIPPED marker found")
+    return "FAIL"
 
 
 def run_verilog_test(test: dict[str, object]) -> bool:
@@ -173,10 +196,21 @@ def main() -> int:
     python_failed = 0
 
     for test in PYTHON_TESTS:
-        if run_python_test(test):
+        if run_python_tool(test) == "PASS":
             python_passed += 1
         else:
             python_failed += 1
+        print("")
+
+    print("TEST VECTOR GENERATION:")
+    vector_passed = 0
+    vector_failed = 0
+
+    for test in VECTOR_TESTS:
+        if run_python_tool(test) == "PASS":
+            vector_passed += 1
+        else:
+            vector_failed += 1
         print("")
 
     print("VERILOG TESTS:")
@@ -204,15 +238,40 @@ def main() -> int:
                 verilog_failed += 1
             print("")
 
-    final_pass = python_failed == 0 and verilog_failed == 0
+    print("RTL OUTPUT COMPARISON:")
+    compare_passed = 0
+    compare_failed = 0
+    compare_skipped = 0
+
+    for test in COMPARISON_TESTS:
+        status = run_python_tool(test)
+        if status == "PASS":
+            compare_passed += 1
+        elif status == "SKIPPED":
+            compare_skipped += 1
+        else:
+            compare_failed += 1
+        print("")
+
+    final_pass = (
+        python_failed == 0
+        and vector_failed == 0
+        and verilog_failed == 0
+        and compare_failed == 0
+    )
 
     print("")
     print("FINAL STATUS:")
     print(f"python_passed: {python_passed}")
     print(f"python_failed: {python_failed}")
+    print(f"vector_passed: {vector_passed}")
+    print(f"vector_failed: {vector_failed}")
     print(f"verilog_passed: {verilog_passed}")
     print(f"verilog_failed: {verilog_failed}")
     print(f"verilog_skipped: {1 if verilog_skipped else 0}")
+    print(f"comparison_passed: {compare_passed}")
+    print(f"comparison_failed: {compare_failed}")
+    print(f"comparison_skipped: {compare_skipped}")
     print("STATUS=PASS" if final_pass else "STATUS=FAIL")
 
     return 0 if final_pass else 1

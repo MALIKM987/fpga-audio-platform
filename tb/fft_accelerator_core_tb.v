@@ -48,7 +48,15 @@ module fft_accelerator_core_tb;
     integer bass_gain_path_ok = 0;
     integer mid_gain_path_ok = 0;
     integer treble_gain_path_ok = 0;
+    integer vector_fd = 0;
+    integer output_fd = 0;
+    integer scan_result = 0;
+    integer csv_index = 0;
+    integer csv_sample = 0;
+    integer line_status = 0;
     reg [DATA_WIDTH-1:0] read_value;
+    reg [8*64-1:0] csv_header;
+    reg signed [SAMPLE_WIDTH-1:0] input_samples [0:FFT_SIZE-1];
 
     fft_accelerator_core #(
         .FFT_SIZE(FFT_SIZE),
@@ -130,6 +138,8 @@ module fft_accelerator_core_tb;
     function signed [SAMPLE_WIDTH-1:0] expected_output;
         input integer index;
         integer effective_bin;
+        reg signed [GAIN_WIDTH-1:0] gain;
+        reg signed [SAMPLE_WIDTH+GAIN_WIDTH-1:0] product;
         begin
             if (index <= FFT_SIZE / 2) begin
                 effective_bin = index;
@@ -138,16 +148,49 @@ module fft_accelerator_core_tb;
             end
 
             if (effective_bin <= 1) begin
-                expected_output = 16'sd1500;
+                gain = GAIN_1_50;
             end else if (effective_bin <= 21) begin
-                expected_output = 16'sd1000;
+                gain = GAIN_1_00;
             end else begin
-                expected_output = 16'sd750;
+                gain = GAIN_0_75;
             end
+
+            product = input_samples[index] * gain;
+            expected_output = product >>> 14;
         end
     endfunction
 
     initial begin
+        for (i = 0; i < FFT_SIZE; i = i + 1) begin
+            input_samples[i] = 16'sd1000;
+        end
+
+        vector_fd = $fopen("sim/vectors/mixed.csv", "r");
+        if (vector_fd != 0) begin
+            line_status = $fgets(csv_header, vector_fd);
+            for (i = 0; i < FFT_SIZE; i = i + 1) begin
+                scan_result = $fscanf(vector_fd, "%d,%d\n", csv_index, csv_sample);
+                if (scan_result == 2 && csv_index >= 0 && csv_index < FFT_SIZE) begin
+                    input_samples[csv_index] = csv_sample;
+                end else begin
+                    errors = errors + 1;
+                    $display("TEST input_vector_read FAIL at row %0d", i);
+                end
+            end
+            $fclose(vector_fd);
+            $display("INPUT_VECTOR=sim/vectors/mixed.csv");
+        end else begin
+            $display("INPUT_VECTOR=default_constant_1000");
+            $display("NOTE=sim/vectors/mixed.csv not found, using built-in fallback samples.");
+        end
+
+        output_fd = $fopen("sim/fft_accelerator_core_output.csv", "w");
+        if (output_fd != 0) begin
+            $fdisplay(output_fd, "index,sample");
+        end else begin
+            $display("NOTE=Could not open sim/fft_accelerator_core_output.csv for writing.");
+        end
+
         $display("=== REGISTER CONTROLLED FFT ACCELERATOR DEMO ===");
         $display("MODE=MODEL_PASSTHROUGH");
         $display("NOTE=FFT and IFFT wrappers are currently passthrough models.");
@@ -220,7 +263,7 @@ module fft_accelerator_core_tb;
         for (i = 0; i < FFT_SIZE; i = i + 1) begin
             @(negedge clk);
             sample_valid = 1'b1;
-            sample_in = 16'sd1000;
+            sample_in = input_samples[i];
 
             @(posedge clk);
             #1;
@@ -246,6 +289,10 @@ module fft_accelerator_core_tb;
             end
 
             if (out_valid) begin
+                if (output_fd != 0) begin
+                    $fdisplay(output_fd, "%0d,%0d", out_index, sample_out);
+                end
+
                 if (out_index !== output_count[7:0]) begin
                     output_order_ok = 0;
                     $display("  order error: out_index=%0d expected=%0d",
@@ -258,15 +305,15 @@ module fft_accelerator_core_tb;
                              output_count, sample_out, expected_output(output_count));
                 end
 
-                if ((out_index == 8'd1) && (sample_out === 16'sd1500)) begin
+                if ((out_index == 8'd1) && (sample_out === expected_output(1))) begin
                     bass_gain_path_ok = 1;
                 end
 
-                if ((out_index == 8'd10) && (sample_out === 16'sd1000)) begin
+                if ((out_index == 8'd10) && (sample_out === expected_output(10))) begin
                     mid_gain_path_ok = 1;
                 end
 
-                if ((out_index == 8'd40) && (sample_out === 16'sd750)) begin
+                if ((out_index == 8'd40) && (sample_out === expected_output(40))) begin
                     treble_gain_path_ok = 1;
                 end
 
@@ -334,6 +381,10 @@ module fft_accelerator_core_tb;
             $display("STATUS=PASS");
         end else begin
             $display("STATUS=FAIL errors=%0d", errors);
+        end
+
+        if (output_fd != 0) begin
+            $fclose(output_fd);
         end
 
         $finish;
