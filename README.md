@@ -40,17 +40,23 @@ PCM5102A, ciągłego streamingu audio ani oscyloskopowego toru pomiarowego.
 
 ## Planowana architektura FFT/IFFT
 
-Planowane moduły nowego kierunku:
+Moduły nowego kierunku zaimplementowane w obecnym etapie:
 
 - `rtl/dsp/sample_block_buffer.v`
 - `rtl/dsp/spectral_gain_select.v`
 - `rtl/dsp/spectral_processor.v`
+
+Moduły nadal oznaczone jako TODO:
+
 - `rtl/dsp/fft_accel_wrapper.v`
 - `rtl/dsp/ifft_accel_wrapper.v`
 - `rtl/dsp/fft_ifft_pipeline.v`
 
-Moduły te nie są jeszcze zaimplementowane. Każdy nowy moduł Verilog powinien
-dostać własny testbench albo być pokryty testbenchem wyższego poziomu.
+`sample_block_buffer` zbiera ramkę próbek dla przyszłego FFT, a
+`spectral_gain_select` i `spectral_processor` wybierają pasmo binu FFT i stosują
+gain Q2.14 do części rzeczywistej oraz urojonej. Wrappery FFT/IFFT i pełny
+pipeline blokowy nie są jeszcze zaimplementowane. Każdy kolejny moduł Verilog
+powinien dostać własny testbench albo być pokryty testbenchem wyższego poziomu.
 
 ## Aktywny self-test
 
@@ -130,6 +136,9 @@ Zaimplementowane:
 - Obsluga przyciskow i rejestrow parametrow L/R.
 - Topy demonstracyjne dla lokalnych zrodel sygnalu z FPGA.
 - `fft_ifft_accel_stub.v` jako stub/interfejs przyszlego akceleratora FFT/IFFT.
+- `sample_block_buffer` jako bufor ramki próbek dla przyszłego FFT.
+- `spectral_gain_select` i `spectral_processor` jako pierwszy blok modyfikacji
+  binów widmowych przez gain Q2.14.
 
 Niezaimplementowane jeszcze:
 
@@ -137,8 +146,9 @@ Niezaimplementowane jeszcze:
 - Pelny BYPASS ADC -> FPGA -> DAC.
 - Pelne przypisanie pinow dla PCM1808/PCM5102A.
 - Prawdziwy FFT/IFFT.
-- `sample_buffer`.
-- `spectral_processor`.
+- Wrapper FFT.
+- Wrapper IFFT.
+- Pełny pipeline `sample_block_buffer -> FFT -> spectral_processor -> IFFT`.
 - Overlap-add.
 
 ## Tryby pracy
@@ -303,9 +313,9 @@ Testbenche sa w katalogu `tb/`. Komendy przykladowe opisano w `docs/simulation_n
 
 ## Nastepne kroki
 
-- Dopracowac plan weryfikacji FPGA-only.
-- Dodac pierwszy maly modul nowej architektury, np. `sample_block_buffer`.
-- Dodac testbench i raport konsolowy PASS/FAIL dla kazdego nowego modulu.
+- Dopracowac plan weryfikacji FPGA-only po dodaniu pierwszych bloków DSP.
+- Przygotowac wrapper FFT/IFFT i testbench integracyjny dla pipeline blokowego.
+- Utrzymywac raport konsolowy PASS/FAIL dla kazdego nowego modulu.
 - Dopiero po stabilnym pipeline FFT/IFFT wrocic do warstwy PCM1808/PCM5102A.
 
 ## Autor
