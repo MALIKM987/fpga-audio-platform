@@ -1,117 +1,120 @@
-# Hardware TODO / Future Work
+# Hardware TODO / Przyszłe Prace Sprzętowe
 
-## Purpose
+## Cel Dokumentu
 
-The current project direction is FPGA-only FFT/IFFT development with
-console-verifiable tests. Physical audio hardware is deferred until the DSP
-pipeline is stable in simulation and self-test.
+Aktualny kierunek projektu to FPGA-only FFT/IFFT z testami sprawdzalnymi w
+konsoli. Fizyczny tor audio jest odłożony do czasu, aż pipeline DSP będzie
+stabilny w symulacji i self-teście.
 
-This document records the hardware work that should be revisited later instead
-of deleting the older bring-up files.
+Ten dokument zapisuje prace sprzętowe, do których trzeba wrócić później,
+zamiast usuwać starsze pliki bring-up.
 
-## Future Input Layer: PCM1808 ADC
+## Przyszła Warstwa Wejściowa: PCM1808 ADC
 
-The PCM1808 ADC remains a future physical input layer.
+PCM1808 ADC pozostaje przyszłą fizyczną warstwą wejściową.
 
-Future work:
+Przyszłe prace:
 
-- confirm safe electrical levels for FPGA pins,
-- confirm clocking and master/slave mode,
-- implement or verify a stable I2S RX block,
-- capture stereo L/R samples into frame/block buffers,
-- test with a known analog input signal,
-- verify DATA, BCLK, LRCK, and MCLK with an oscilloscope or logic analyzer.
+- potwierdzić bezpieczne poziomy napięć dla pinów FPGA,
+- potwierdzić taktowanie i tryb master/slave,
+- zaimplementować albo zweryfikować stabilny blok I2S RX,
+- zapisywać próbki stereo L/R do buforów ramek/bloków,
+- testować z dobrze znanym sygnałem analogowym,
+- zweryfikować DATA, BCLK, LRCK i MCLK oscyloskopem albo analizatorem
+  logicznym.
 
-The first hardware input test should be a plain BYPASS path, not FFT.
+Pierwszy test sprzętowy wejścia powinien być prostym trybem BYPASS, a nie FFT.
 
-## Future Output Layer: PCM5102A DAC
+## Przyszła Warstwa Wyjściowa: PCM5102A DAC
 
-The PCM5102A DAC remains a future physical output layer.
+PCM5102A DAC pozostaje przyszłą fizyczną warstwą wyjściową.
 
-Future work:
+Przyszłe prace:
 
-- confirm I2S format and timing,
-- confirm BCLK/LRCK frequencies,
-- drive known test samples before using FFT/IFFT output,
-- verify analog L/R outputs on an oscilloscope,
-- keep the FPGA pin voltage within safe limits.
+- potwierdzić format i timing I2S,
+- potwierdzić częstotliwości BCLK/LRCK,
+- wysłać znane próbki testowe przed użyciem wyjścia FFT/IFFT,
+- zweryfikować analogowe wyjścia L/R oscyloskopem,
+- utrzymać napięcia na pinach FPGA w bezpiecznym zakresie.
 
-## Real I2S Pins
+## Prawdziwe Piny I2S
 
-Existing pin notes and constraint files are retained as reference material. They
-should not be treated as active for the FPGA-only FFT/IFFT stage.
+Istniejące notatki pinów i pliki constraints zostają jako materiał
+referencyjny. Nie należy traktować ich jako aktywnych dla etapu FPGA-only
+FFT/IFFT.
 
-Future physical I2S work should confirm:
+Przyszłe prace nad fizycznym I2S powinny potwierdzić:
 
-- clock pin,
+- pin zegara,
 - PCM5102A DIN/LRCK/BCLK,
 - PCM1808 DATA/BCLK/LRCK/MCLK,
-- optional button inputs,
-- optional UART TX pin,
-- any board LEDs used for diagnostics.
+- opcjonalne wejścia przycisków,
+- opcjonalny pin UART TX,
+- ewentualne LED-y używane do diagnostyki.
 
-Do not guess pins when creating a hardware top. Each top must match its active
-constraint file.
+Nie należy zgadywać pinów przy tworzeniu topu sprzętowego. Każdy top musi
+pasować do aktywnego pliku constraints.
 
-## Current FPGA-Only Limitations
+## Ograniczenia Aktualnej Wersji FPGA-Only
 
-The current FPGA-only direction intentionally does not provide:
+Aktualny kierunek FPGA-only celowo nie zawiera:
 
-- physical PCM1808 capture,
-- physical PCM5102A playback,
-- real-time continuous audio streaming,
-- oscilloscope-verified analog output,
+- fizycznego przechwytywania próbek z PCM1808,
+- fizycznego odtwarzania przez PCM5102A,
+- ciągłego streamingu audio czasu rzeczywistego,
+- analogowego wyjścia zweryfikowanego oscyloskopem,
 - windowing,
 - overlap-add,
-- final FFT/IFFT IP integration.
+- finalnej integracji z IP FFT/IFFT.
 
-The goal is to verify the block-level FFT/IFFT architecture first.
+Celem jest najpierw zweryfikowanie blokowej architektury FFT/IFFT.
 
-## Future Streaming Audio
+## Przyszły Streaming Audio
 
-After the FFT/IFFT block path is verified, the project can add continuous audio
-streaming. That will require:
+Po zweryfikowaniu ścieżki blokowej FFT/IFFT projekt może dodać ciągły streaming
+audio. Będzie to wymagało:
 
-- input sample buffering,
-- output sample buffering,
-- frame scheduling,
-- latency accounting,
-- underrun/overrun detection,
-- clock-domain and handshake review if external audio clocks are used.
+- buforowania próbek wejściowych,
+- buforowania próbek wyjściowych,
+- harmonogramu ramek,
+- policzenia latencji,
+- wykrywania underrun/overrun,
+- przeglądu domen zegarowych i handshake, jeśli będą używane zewnętrzne zegary
+  audio.
 
-## Windowing and Overlap-Add
+## Windowing i Overlap-Add
 
-Windowing and overlap-add are future DSP features. They should be added only
-after the basic block path works:
+Windowing i overlap-add są przyszłymi funkcjami DSP. Należy dodać je dopiero po
+uruchomieniu podstawowej ścieżki blokowej:
 
 ```text
 input block -> FFT -> spectral modification -> IFFT -> output block
 ```
 
-Planned additions:
+Planowane dodatki:
 
-- window function selection,
-- block overlap,
-- overlap-add reconstruction,
-- gain normalization,
-- additional verification tests for reconstruction error.
+- wybór funkcji okna,
+- nakładanie bloków,
+- rekonstrukcja overlap-add,
+- normalizacja gain,
+- dodatkowe testy błędu rekonstrukcji.
 
-## Oscilloscope Tests
+## Testy Oscyloskopem
 
-Oscilloscope tests belong to the later physical hardware stage.
+Testy oscyloskopem należą do późniejszego etapu sprzętowego.
 
-Suggested order:
+Sugerowana kolejność:
 
-1. FPGA-only simulation reports.
-2. Tang Nano self-test LED/UART diagnostics.
-3. PCM5102A output with a known generated signal.
-4. PCM1808 input capture.
-5. PCM1808 -> FPGA -> PCM5102A BYPASS.
-6. FFT/IFFT pipeline inserted into the verified hardware path.
+1. raporty symulacji FPGA-only,
+2. diagnostyka LED/UART self-testu na Tang Nano,
+3. wyjście PCM5102A ze znanym sygnałem generowanym w FPGA,
+4. przechwytywanie wejścia PCM1808,
+5. BYPASS PCM1808 -> FPGA -> PCM5102A,
+6. wstawienie pipeline FFT/IFFT do zweryfikowanego toru sprzętowego.
 
-## Existing Hardware Files To Keep For Reference
+## Istniejące Pliki Sprzętowe Do Zachowania Jako Referencja
 
-These files may be useful when the hardware layer returns:
+Te pliki mogą być przydatne, gdy projekt wróci do warstwy sprzętowej:
 
 - `rtl/audio/i2s_tx.v`
 - `rtl/audio/tone_gen.v`
@@ -120,11 +123,11 @@ These files may be useful when the hardware layer returns:
 - `rtl/top/tang_audio_pcm5102a_scope_test_top.v`
 - `rtl/top/tang_audio_buttons_volume_test_top.v`
 
-Associated Gowin constraint files may also be useful:
+Powiązane pliki constraints Gowin również mogą się przydać:
 
 - `gowin_impl/tang_audio_hw/pcm5102a_test.cst`
 - `gowin_impl/tang_audio_hw/buttons_volume_test.cst`
 - `gowin_impl/tang_audio_hw/full_button_eq_future.cst`
 
-These should be treated as legacy/reference material until the project returns
-to physical ADC/DAC integration.
+Do czasu powrotu do integracji ADC/DAC należy traktować je jako materiał
+legacy/referencyjny.

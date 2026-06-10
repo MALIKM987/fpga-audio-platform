@@ -1,30 +1,32 @@
 # FPGA Audio Platform
 
-Current priority: an FPGA-only FFT/IFFT accelerator for I2S-like audio blocks
-on Tang Nano 20K, verified from simulation and console reports before returning
-to external audio hardware.
+Aktualny priorytet projektu to akcelerator FFT/IFFT działający wyłącznie w
+FPGA, przetwarzający bloki próbek audio w formacie I2S-like i weryfikowalny z
+poziomu symulacji oraz raportów konsolowych. Dopiero po sprawdzeniu logiki DSP
+projekt wróci do fizycznego toru audio.
 
-The repository started as a physical audio bring-up project for:
+Projekt zaczynał jako uruchomienie fizycznego toru:
 
 ```text
 PCM1808 ADC -> FPGA -> PCM5102A DAC
 ```
 
-That hardware path is now future work. The active direction is to model audio
-frames internally, process them in FPGA logic, and report results in a way that
-can be checked without ADC, DAC, oscilloscope, or real-time streaming.
+Ten tor pozostaje jako przyszła warstwa sprzętowa. Obecnie skupiamy się na
+modelowaniu ramek audio wewnątrz FPGA/testbencha, przetwarzaniu ich w logice
+FPGA i raportowaniu wyników bez konieczności użycia ADC, DAC, oscyloskopu ani
+ciągłego streamingu audio.
 
-## Current Scope
+## Aktualny Zakres
 
-The current project scope is:
+Aktualny zakres projektu:
 
-- FPGA-only DSP and control logic.
-- Console-verifiable FFT/IFFT pipeline planning.
-- Self-test diagnostics on Tang Nano 20K.
-- Fixed-point processing for signed 16-bit audio-style samples.
-- Stereo L/R architecture planning, with shared accelerator use allowed.
+- logika DSP i sterująca działająca wyłącznie w FPGA,
+- planowany pipeline FFT/IFFT sprawdzalny w konsoli,
+- self-test diagnostyczny dla Tang Nano 20K,
+- przetwarzanie fixed-point dla signed 16-bit próbek audio,
+- architektura stereo L/R, z możliwością współdzielenia akceleratora.
 
-The first target architecture is:
+Pierwsza docelowa architektura:
 
 ```text
 test generator / I2S-like input model
@@ -36,12 +38,12 @@ test generator / I2S-like input model
 -> console report / UART report
 ```
 
-No physical PCM1808 input path or PCM5102A output path is part of the current
-implementation target.
+Fizyczne wejście PCM1808 i fizyczne wyjście PCM5102A nie są częścią obecnego
+celu implementacyjnego.
 
-## Current Active Self-Test
+## Aktualny Self-Test
 
-The active RTL that can be used today is the diagnostic self-test:
+Obecnie aktywny RTL to diagnostyczny self-test:
 
 ```text
 test_signal_gen
@@ -52,7 +54,7 @@ test_signal_gen
 -> uart_tx
 ```
 
-Important files:
+Ważne pliki:
 
 - `rtl/top/tang_audio_selftest_top.v`
 - `rtl/top/tang_audio_selftest_board_top.v`
@@ -65,29 +67,30 @@ Important files:
 - `rtl/dsp/volume_lut_q2_14.v`
 - `rtl/uart/uart_tx.v`
 
-For the first minimal Gowin hardware self-test, use:
+Dla pierwszego minimalnego testu sprzętowego w Gowin użyj:
 
 ```text
 Top module: tang_audio_selftest_board_top
 Constraints: gowin_impl/tang_audio_hw/src/tang_audio_hw.cst
 ```
 
-This wrapper exposes only `clk` and `led`. UART is kept internal for the first
-board-level check unless a confirmed 3.3 V UART connection is available.
+Ten wrapper wystawia tylko `clk` i `led`. UART pozostaje wewnętrzny dla
+pierwszego testu płytkowego, chyba że dostępne jest potwierdzone połączenie
+UART 3.3 V.
 
-## Planned FFT/IFFT Architecture
+## Planowana Architektura FFT/IFFT
 
-The planned first FFT/IFFT version uses:
+Pierwsza wersja FFT/IFFT ma używać:
 
-- `FFT_SIZE = 256`
-- signed 16-bit samples
-- stereo L/R blocks
-- fixed-point arithmetic
-- Q2.14 gain values
-- test modes such as bypass, sine tones, impulse, mixed signal, and different
-  L/R gains
+- `FFT_SIZE = 256`,
+- signed 16-bit próbek,
+- bloków stereo L/R,
+- arytmetyki fixed-point,
+- wartości gain w Q2.14,
+- trybów testowych takich jak bypass, sinusy, impuls, sygnał mieszany i różne
+  gainy dla kanałów L/R.
 
-Planned RTL modules include:
+Planowane moduły RTL:
 
 - `rtl/dsp/sample_block_buffer.v`
 - `rtl/dsp/spectral_gain_select.v`
@@ -96,28 +99,27 @@ Planned RTL modules include:
 - `rtl/dsp/ifft_accel_wrapper.v`
 - `rtl/dsp/fft_ifft_pipeline.v`
 
-These modules are not implemented yet. They should be added in small steps,
-each with a testbench or coverage from a higher-level testbench.
+Te moduły nie są jeszcze zaimplementowane. Należy dodawać je małymi krokami,
+każdy z osobnym testbenchem albo pokryciem w testbenchu wyższego poziomu.
 
-## Hardware TODO / Future Work
+## Hardware TODO / Przyszłe Prace
 
-The physical audio path is intentionally deferred:
+Fizyczny tor audio jest celowo odłożony:
 
-- PCM1808 ADC as the future physical input layer.
-- PCM5102A DAC as the future physical output layer.
-- Real I2S pin constraints and oscilloscope checks.
-- Continuous audio streaming.
-- Windowing and overlap-add.
-- Later integration with external hardware after the FPGA-only pipeline is
-  verified.
+- PCM1808 ADC jako przyszła fizyczna warstwa wejściowa,
+- PCM5102A DAC jako przyszła fizyczna warstwa wyjściowa,
+- prawdziwe constrainty pinów I2S i testy oscyloskopem,
+- ciągły streaming audio,
+- windowing i overlap-add,
+- późniejsza integracja z hardware po zweryfikowaniu pipeline FPGA-only.
 
-Existing I2S and hardware bring-up files are retained as legacy/reference
-material for that later stage. Do not treat them as the active architecture for
-the FFT/IFFT work.
+Istniejące pliki I2S i bring-up sprzętowego zostają jako materiał
+legacy/referencyjny dla późniejszego etapu. Nie należy traktować ich jako
+aktywnej architektury dla prac FFT/IFFT.
 
-## Documentation
+## Dokumentacja
 
-Start here:
+Zacznij tutaj:
 
 - `docs/fpga_only_architecture.md`
 - `docs/verification_plan.md`

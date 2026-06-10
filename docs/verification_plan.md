@@ -1,13 +1,13 @@
-# Verification Plan
+# Plan Weryfikacji
 
-## Goal
+## Cel
 
-The verification goal is to prove the FPGA-only FFT/IFFT pipeline before
-returning to physical ADC/DAC hardware. Tests should be deterministic,
-repeatable from the console, and clear enough to show PASS/FAIL status without
-an oscilloscope.
+Celem weryfikacji jest udowodnienie działania pipeline FPGA-only FFT/IFFT przed
+powrotem do fizycznego ADC/DAC. Testy mają być deterministyczne, powtarzalne z
+poziomu konsoli i czytelne na tyle, żeby status PASS/FAIL był zrozumiały bez
+oscyloskopu.
 
-The planned pipeline under test is:
+Planowany pipeline testowany:
 
 ```text
 test generator / I2S-like input model
@@ -19,112 +19,114 @@ test generator / I2S-like input model
 -> console report / UART report
 ```
 
-The first target parameters are:
+Pierwsze parametry docelowe:
 
-- `FFT_SIZE = 256`
-- `SAMPLE_WIDTH = 16`
-- signed fixed-point samples
-- stereo L/R tests
-- Q2.14 gain values
+- `FFT_SIZE = 256`,
+- `SAMPLE_WIDTH = 16`,
+- signed fixed-point samples,
+- testy stereo L/R,
+- wartości gain w Q2.14.
 
-## Required Tests
+## Wymagane Testy
 
 ### bypass
 
-Purpose:
+Cel:
 
-- Run FFT -> IFFT without spectral modification.
-- Confirm that the output is almost equal to the input.
+- uruchomić FFT -> IFFT bez modyfikacji widma,
+- potwierdzić, że wyjście jest prawie takie samo jak wejście.
 
-PASS criteria:
+Kryteria PASS:
 
-- `FFT_DONE = 1`
-- `IFFT_DONE = 1`
-- output samples match input samples within the accepted fixed-point tolerance,
-- no unexpected clipping.
+- `FFT_DONE = 1`,
+- `IFFT_DONE = 1`,
+- próbki wyjściowe zgadzają się z wejściowymi w dopuszczalnej tolerancji
+  fixed-point,
+- brak nieoczekiwanego clippingu.
 
 ### sine_100Hz
 
-Purpose:
+Cel:
 
-- Verify bass-band detection and modification.
-- Confirm that a low-frequency tone maps to the expected low FFT bin range.
+- sprawdzić detekcję i modyfikację pasma bass,
+- potwierdzić, że niska częstotliwość trafia do oczekiwanego zakresu niskich
+  binów FFT.
 
-PASS criteria:
+Kryteria PASS:
 
-- dominant bin is in the bass range,
-- bass gain changes the expected bins,
-- mid/treble bins remain mostly unchanged,
-- clipping matches expectation.
+- dominujący bin jest w zakresie bass,
+- bass gain zmienia oczekiwane biny,
+- biny mid/treble pozostają prawie bez zmian,
+- clipping jest zgodny z oczekiwaniem.
 
 ### sine_1kHz
 
-Purpose:
+Cel:
 
-- Verify mid-band detection and modification.
+- sprawdzić detekcję i modyfikację pasma mid.
 
-PASS criteria:
+Kryteria PASS:
 
-- dominant bin is in the mid range,
-- mid gain changes the expected bins,
-- bass/treble bins remain mostly unchanged,
-- output magnitude changes consistently with the configured gain.
+- dominujący bin jest w zakresie mid,
+- mid gain zmienia oczekiwane biny,
+- biny bass/treble pozostają prawie bez zmian,
+- magnituda wyjściowa zmienia się zgodnie z ustawionym gainem.
 
 ### sine_8kHz
 
-Purpose:
+Cel:
 
-- Verify treble-band detection and modification.
+- sprawdzić detekcję i modyfikację pasma treble.
 
-PASS criteria:
+Kryteria PASS:
 
-- dominant bin is in the treble range,
-- treble gain changes the expected bins,
-- bass/mid bins remain mostly unchanged,
-- clipping is reported if the configured gain exceeds output range.
+- dominujący bin jest w zakresie treble,
+- treble gain zmienia oczekiwane biny,
+- biny bass/mid pozostają prawie bez zmian,
+- clipping jest raportowany, jeśli ustawiony gain przekracza zakres wyjścia.
 
 ### impulse
 
-Purpose:
+Cel:
 
-- Exercise the full FFT/IFFT path with an impulse input.
-- Check bin spreading and reconstruction behavior.
+- przetestować pełną ścieżkę FFT/IFFT na impulsie wejściowym,
+- sprawdzić rozłożenie po binach i rekonstrukcję.
 
-PASS criteria:
+Kryteria PASS:
 
-- FFT and IFFT complete,
-- reconstructed impulse is within tolerance,
-- report shows no unknown or invalid values.
+- FFT i IFFT kończą pracę,
+- zrekonstruowany impuls mieści się w tolerancji,
+- raport nie zawiera wartości unknown ani invalid.
 
 ### mixed_signal
 
-Purpose:
+Cel:
 
-- Verify several frequency components at the same time.
-- Confirm that bass/mid/treble gains affect the correct parts of the spectrum.
+- sprawdzić kilka składowych częstotliwościowych jednocześnie,
+- potwierdzić, że gainy bass/mid/treble wpływają na właściwe części widma.
 
-PASS criteria:
+Kryteria PASS:
 
-- expected components are visible in the report,
-- modified magnitudes match the selected gain settings,
-- unrelated bins remain within tolerance.
+- oczekiwane składowe są widoczne w raporcie,
+- zmodyfikowane magnitudy odpowiadają wybranym ustawieniom gain,
+- niezwiązane biny pozostają w tolerancji.
 
 ### stereo_diff_gains
 
-Purpose:
+Cel:
 
-- Verify independent left and right channel parameters.
+- sprawdzić niezależne parametry kanałów lewego i prawego.
 
-PASS criteria:
+Kryteria PASS:
 
-- channel L uses L gain registers,
-- channel R uses R gain registers,
-- reported magnitudes differ according to the configured L/R gains,
-- channel data is not swapped.
+- kanał L używa rejestrów gain kanału L,
+- kanał R używa rejestrów gain kanału R,
+- raportowane magnitudy różnią się zgodnie z ustawieniami L/R,
+- dane kanałów nie są zamienione miejscami.
 
-## Console Report Format
+## Format Raportu Konsolowego
 
-Example report:
+Przykładowy raport:
 
 ```text
 === FFT/IFFT PIPELINE TEST ===
@@ -146,30 +148,32 @@ CLIP=0
 STATUS=PASS
 ```
 
-Each testbench should print enough information to explain a failure. A failing
-test should use `STATUS=FAIL` and identify the mismatched field, such as
-dominant bin, magnitude, clipping, or output reconstruction tolerance.
+Każdy testbench powinien wypisywać tyle informacji, żeby dało się zrozumieć
+przyczynę błędu. Test zakończony niepowodzeniem powinien używać `STATUS=FAIL`
+i wskazywać pole, które się nie zgadza: dominujący bin, magnitudę, clipping
+albo tolerancję rekonstrukcji wyjścia.
 
-## General PASS/FAIL Rules
+## Ogólne Zasady PASS/FAIL
 
-Tests should fail when:
+Testy powinny kończyć się błędem, gdy:
 
-- `FFT_DONE` is not asserted,
-- `IFFT_DONE` is not asserted,
-- output contains unknown values,
-- dominant bin is outside the expected range,
-- gain does not affect the expected band,
-- unexpected clipping occurs,
-- stereo channel mapping is incorrect.
+- `FFT_DONE` nie zostanie ustawione,
+- `IFFT_DONE` nie zostanie ustawione,
+- wyjście zawiera wartości unknown,
+- dominujący bin jest poza oczekiwanym zakresem,
+- gain nie wpływa na oczekiwane pasmo,
+- pojawia się nieoczekiwany clipping,
+- mapowanie kanałów stereo jest błędne.
 
-Tests may allow a small tolerance for fixed-point scaling, rounding, and FFT/IFFT
-normalization. That tolerance must be printed or documented by the testbench.
+Testy mogą dopuszczać małą tolerancję dla skalowania fixed-point, zaokrągleń i
+normalizacji FFT/IFFT. Tolerancja musi być wypisana albo opisana przez
+testbench.
 
-## Current Verification Status
+## Aktualny Status Weryfikacji
 
-The final FFT/IFFT tests cannot run yet because the FFT/IFFT pipeline modules
-are not implemented. Existing self-test testbenches remain useful for the
-current diagnostic layer:
+Finalne testy FFT/IFFT nie mogą jeszcze działać, ponieważ moduły pipeline
+FFT/IFFT nie są zaimplementowane. Istniejące testbenche self-testu pozostają
+przydatne dla obecnej warstwy diagnostycznej:
 
 - `tb/test_signal_gen_tb.v`
 - `tb/modulation_core_tb.v`
@@ -177,5 +181,5 @@ current diagnostic layer:
 - `tb/uart_tx_tb.v`
 - `tb/tang_audio_selftest_top_tb.v`
 
-Those tests verify pieces of the current diagnostic path, not the future
-FFT/IFFT accelerator.
+Te testy sprawdzają fragmenty obecnego toru diagnostycznego, a nie przyszły
+akcelerator FFT/IFFT.

@@ -1,34 +1,35 @@
-# FPGA-Only FFT/IFFT Architecture
+# Architektura FPGA-Only FFT/IFFT
 
-## Goal
+## Cel
 
-The current project goal is an FPGA-only FFT/IFFT accelerator for I2S-like
-audio blocks on Tang Nano 20K. The design should be verifiable from simulation
-and console reports before it is connected to real external audio hardware.
+Aktualnym celem projektu jest akcelerator FFT/IFFT działający wyłącznie w FPGA
+dla bloków danych audio w formacie I2S-like na Tang Nano 20K. Projekt ma być
+sprawdzalny w symulacji i przez raporty konsolowe zanim zostanie ponownie
+połączony z rzeczywistym sprzętem audio.
 
-This stage focuses on deterministic block processing, fixed-point arithmetic,
-clear test reports, and a clean interface between audio-style sample frames and
-the future FFT/IFFT accelerator.
+Ten etap skupia się na deterministycznym przetwarzaniu blokowym, arytmetyce
+fixed-point, czytelnych raportach testowych i czystym interfejsie między
+ramkami próbek audio a przyszłym akceleratorem FFT/IFFT.
 
-## Why Physical ADC/DAC Is Deferred
+## Dlaczego Odkładamy Fizyczny ADC/DAC
 
-The earlier hardware direction used:
+Poprzedni kierunek sprzętowy zakładał:
 
 ```text
 PCM1808 ADC -> FPGA -> PCM5102A DAC
 ```
 
-That path depends on physical wiring, clocking, real I2S RX/TX timing, analog
-measurement, and board-level debug. Those are useful later, but they make it
-harder to prove whether the DSP logic itself is correct.
+Ten tor zależy od okablowania, taktowania, rzeczywistego I2S RX/TX, pomiarów
+analogowych i debugowania płytki. To będzie potrzebne później, ale utrudnia
+jednoznaczne sprawdzenie, czy sama logika DSP działa poprawnie.
 
-For now, the project defers PCM1808, PCM5102A, physical I2S, and continuous
-audio streaming. The FPGA logic should first pass repeatable tests using
-internally generated or testbench-modeled sample blocks.
+Na tym etapie odkładamy PCM1808, PCM5102A, fizyczne I2S i ciągły streaming
+audio. Najpierw logika FPGA ma przejść powtarzalne testy na blokach próbek
+generowanych wewnętrznie albo modelowanych w testbenchu.
 
-## Logical Pipeline
+## Pipeline Logiczny
 
-The target processing path is:
+Docelowa ścieżka przetwarzania:
 
 ```text
 test generator / I2S-like input model
@@ -40,15 +41,15 @@ test generator / I2S-like input model
 -> console report / UART report
 ```
 
-The input and output models are not meant to be physical I2S drivers in this
-stage. They represent audio frames in an I2S-like order so the later hardware
-integration can reuse the same data layout.
+Modele wejścia i wyjścia nie są w tym etapie fizycznymi driverami I2S. Mają
+reprezentować ramki audio w kolejności podobnej do I2S, żeby późniejsza
+integracja sprzętowa mogła użyć tego samego układu danych.
 
-## Current State
+## Aktualny Stan
 
-The FFT/IFFT pipeline RTL is not implemented yet.
+Pipeline FFT/IFFT nie jest jeszcze zaimplementowany w RTL.
 
-The active logic today is a standalone diagnostic self-test:
+Obecnie aktywna logika to samodzielny self-test diagnostyczny:
 
 ```text
 test_signal_gen
@@ -59,7 +60,7 @@ test_signal_gen
 -> uart_tx
 ```
 
-Relevant files:
+Powiązane pliki:
 
 - `rtl/top/tang_audio_selftest_top.v`
 - `rtl/top/tang_audio_selftest_board_top.v`
@@ -72,14 +73,14 @@ Relevant files:
 - `rtl/dsp/volume_lut_q2_14.v`
 - `rtl/uart/uart_tx.v`
 
-This self-test is useful as the current diagnostic baseline. It generates an
-internal test signal, changes VOL/BASS/MID/TREBLE parameters automatically,
-runs a simple DSP modulation block, collects min/max/clipping information, and
-formats a UART diagnostic stream.
+Ten self-test jest aktualną bazą diagnostyczną. Generuje wewnętrzny sygnał
+testowy, automatycznie zmienia parametry VOL/BASS/MID/TREBLE, uruchamia prosty
+blok DSP `modulation_core`, zbiera min/max/clipping i formatuje strumień
+diagnostyczny UART.
 
-## Planned RTL Modules
+## Planowane Moduły RTL
 
-The following modules are planned for the FPGA-only FFT/IFFT architecture:
+Planowane moduły dla architektury FPGA-only FFT/IFFT:
 
 - `rtl/dsp/sample_block_buffer.v`
 - `rtl/dsp/spectral_gain_select.v`
@@ -88,25 +89,25 @@ The following modules are planned for the FPGA-only FFT/IFFT architecture:
 - `rtl/dsp/ifft_accel_wrapper.v`
 - `rtl/dsp/fft_ifft_pipeline.v`
 
-These modules should be introduced step by step. Each new Verilog module should
-have a dedicated testbench or be covered by a higher-level pipeline testbench.
+Moduły powinny być dodawane etapami. Każdy nowy moduł Verilog powinien mieć
+własny testbench albo być pokryty testbenchem wyższego poziomu.
 
-## First Version Parameters
+## Parametry Pierwszej Wersji
 
-Initial target parameters:
+Początkowe parametry:
 
-- `FFT_SIZE = 256`
-- `SAMPLE_WIDTH = 16` signed
-- stereo L/R sample blocks
-- fixed-point arithmetic
-- gain values in Q2.14
+- `FFT_SIZE = 256`,
+- `SAMPLE_WIDTH = 16` signed,
+- bloki próbek stereo L/R,
+- arytmetyka fixed-point,
+- wartości gain w Q2.14.
 
-The accelerator may be shared between left and right channels in the first
-version if that keeps the architecture simpler.
+W pierwszej wersji akcelerator może być współdzielony między kanałem lewym i
+prawym, jeśli uprości to architekturę.
 
-## Parameter Registers
+## Rejestry Parametrów
 
-The planned processing configuration is stereo-aware:
+Planowana konfiguracja przetwarzania jest stereofoniczna:
 
 ```text
 volume_L
@@ -120,62 +121,62 @@ mid_gain_R
 treble_gain_R
 ```
 
-The first implementation can model these as simple registers driven by a
-testbench or self-test controller. A later system can expose them through UART,
-buttons, or a memory-mapped interface.
+Pierwsza implementacja może modelować te wartości jako proste rejestry
+sterowane z testbencha albo kontrolera self-testu. Późniejszy system może
+wystawić je przez UART, przyciski albo interfejs memory-mapped.
 
 ## Spectral Processor
 
-The `spectral_processor` will modify FFT bins according to the configured
-frequency bands.
+`spectral_processor` będzie modyfikować biny FFT zgodnie z ustawionymi pasmami
+częstotliwości.
 
-Expected first behavior:
+Oczekiwane pierwsze zachowanie:
 
-- bass gain affects low-frequency bins,
-- mid gain affects middle-frequency bins,
-- treble gain affects high-frequency bins,
-- volume can be applied globally or after IFFT,
-- clipping/overflow should be detected and reported.
+- bass gain wpływa na niskie biny,
+- mid gain wpływa na środkowe biny,
+- treble gain wpływa na wysokie biny,
+- volume może być zastosowane globalnie albo po IFFT,
+- clipping/overflow powinien być wykrywany i raportowany.
 
-This is not a real-time audio effect yet. It is a block-processing test path
-intended to prove FFT -> modify bins -> IFFT behavior.
+To jeszcze nie jest efekt audio czasu rzeczywistego. To testowa ścieżka
+blokowa do udowodnienia zachowania FFT -> modyfikacja binów -> IFFT.
 
-## Self-Test Mode
+## Tryb Self-Test
 
-The self-test should eventually generate deterministic sample blocks such as:
+Docelowy self-test powinien generować deterministyczne bloki próbek, np.:
 
 - bypass input,
-- 100 Hz sine-like signal,
-- 1 kHz sine-like signal,
-- 8 kHz sine-like signal,
-- impulse,
-- mixed signal,
-- stereo signals with different L/R gains.
+- sygnał sinusoidalny 100 Hz,
+- sygnał sinusoidalny 1 kHz,
+- sygnał sinusoidalny 8 kHz,
+- impuls,
+- sygnał mieszany,
+- sygnały stereo z różnymi gainami L/R.
 
-The current self-test is not the final FFT/IFFT self-test, but it is the active
-diagnostic foundation for clock/reset/status/UART behavior.
+Obecny self-test nie jest jeszcze finalnym self-testem FFT/IFFT, ale jest
+aktywną bazą diagnostyczną dla zegara, resetu, statusu i UART.
 
-## Reporting
+## Raportowanie
 
-Results should be visible first in testbench console output. A later board
-self-test can reuse the same summary fields over UART on Tang Nano 20K.
+Wyniki powinny być widoczne najpierw w konsoli testbencha. Późniejszy self-test
+na płytce może użyć tych samych pól raportu przez UART na Tang Nano 20K.
 
-Expected report contents include:
+Oczekiwane pola raportu:
 
-- test name,
-- FFT size,
-- channel,
-- gain settings,
+- nazwa testu,
+- rozmiar FFT,
+- kanał,
+- ustawienia gain,
 - FFT done,
 - IFFT done,
-- dominant bin/frequency,
-- input and output magnitudes,
-- clipping flag,
-- PASS/FAIL status.
+- dominujący bin/częstotliwość,
+- magnituda wejścia i wyjścia,
+- flaga clippingu,
+- status PASS/FAIL.
 
-## Future FFT Core Integration
+## Przyszła Integracja Rdzenia FFT
 
-The FFT/IFFT wrapper may later connect to Gowin FFT IP or another verified FFT
-core. The wrapper should hide core-specific handshakes from the rest of the
-pipeline so the surrounding testbench, spectral processor, and report logic can
-remain stable while the FFT implementation changes.
+Wrapper FFT/IFFT może później połączyć się z Gowin FFT IP albo innym
+zweryfikowanym rdzeniem FFT. Wrapper powinien ukrywać handshake specyficzny dla
+danego rdzenia, żeby testbench, `spectral_processor` i logika raportowania
+pozostały stabilne nawet przy zmianie implementacji FFT.
