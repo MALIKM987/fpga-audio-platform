@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the small Verilog testbench suite with Icarus Verilog."""
+"""Run Python reference tests and the Verilog testbench suite."""
 
 from __future__ import annotations
 
@@ -12,7 +12,14 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SIM_DIR = REPO_ROOT / "sim"
 
-TESTS = [
+PYTHON_TESTS = [
+    {
+        "name": "fft_reference_model",
+        "command": [sys.executable, "tools/test_fft_reference_model.py"],
+    },
+]
+
+VERILOG_TESTS = [
     {
         "name": "fft_control_regs",
         "sources": [
@@ -94,7 +101,32 @@ def run_command(command: list[str]) -> subprocess.CompletedProcess[str]:
     )
 
 
-def run_test(test: dict[str, object]) -> bool:
+def run_python_test(test: dict[str, object]) -> bool:
+    name = str(test["name"])
+    command = [str(part) for part in test["command"]]
+    result = run_command(command)
+    output = result.stdout.rstrip()
+    pass_marker = "STATUS=PASS" in result.stdout
+    fail_marker = "STATUS=FAIL" in result.stdout
+
+    if output:
+        print(output)
+
+    if result.returncode == 0 and pass_marker and not fail_marker:
+        print(f"TEST {name} PASS")
+        return True
+
+    print(f"TEST {name} FAIL")
+    if result.returncode != 0:
+        print(f"  exit code: {result.returncode}")
+    if not pass_marker:
+        print("  missing STATUS=PASS marker")
+    if fail_marker:
+        print("  STATUS=FAIL marker found")
+    return False
+
+
+def run_verilog_test(test: dict[str, object]) -> bool:
     name = str(test["name"])
     sources = [str(source) for source in test["sources"]]
     output_file = SIM_DIR / f"{name}.vvp"
@@ -133,7 +165,21 @@ def main() -> int:
     iverilog_path = shutil.which("iverilog")
     vvp_path = shutil.which("vvp")
 
-    print("=== VERILOG TEST RUNNER ===")
+    print("=== PROJECT TEST RUNNER ===")
+    print("")
+    print("PYTHON REFERENCE TESTS:")
+
+    python_passed = 0
+    python_failed = 0
+
+    for test in PYTHON_TESTS:
+        if run_python_test(test):
+            python_passed += 1
+        else:
+            python_failed += 1
+        print("")
+
+    print("VERILOG TESTS:")
     print("TOOLS:")
     print_tool_status("iverilog", iverilog_path)
     print_tool_status("vvp", vvp_path)
@@ -141,28 +187,35 @@ def main() -> int:
 
     SIM_DIR.mkdir(exist_ok=True)
 
+    verilog_passed = 0
+    verilog_failed = 0
+    verilog_skipped = False
+
     if not iverilog_path or not vvp_path:
         print("Cannot run Verilog simulations.")
         print("Install Icarus Verilog and make sure iverilog/vvp are available in PATH.")
         print("STATUS=SKIPPED")
-        return 0
+        verilog_skipped = True
+    else:
+        for test in VERILOG_TESTS:
+            if run_verilog_test(test):
+                verilog_passed += 1
+            else:
+                verilog_failed += 1
+            print("")
 
-    passed = 0
-    failed = 0
+    final_pass = python_failed == 0 and verilog_failed == 0
 
-    for test in TESTS:
-        if run_test(test):
-            passed += 1
-        else:
-            failed += 1
-        print("")
+    print("")
+    print("FINAL STATUS:")
+    print(f"python_passed: {python_passed}")
+    print(f"python_failed: {python_failed}")
+    print(f"verilog_passed: {verilog_passed}")
+    print(f"verilog_failed: {verilog_failed}")
+    print(f"verilog_skipped: {1 if verilog_skipped else 0}")
+    print("STATUS=PASS" if final_pass else "STATUS=FAIL")
 
-    print("SUMMARY:")
-    print(f"passed: {passed}")
-    print(f"failed: {failed}")
-    print("STATUS=PASS" if failed == 0 else "STATUS=FAIL")
-
-    return 0 if failed == 0 else 1
+    return 0 if final_pass else 1
 
 
 if __name__ == "__main__":
