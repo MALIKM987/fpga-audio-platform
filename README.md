@@ -293,7 +293,16 @@ gowin_impl/tang_audio_hw/
 
 Aktualny projekt narzedziowy moze uzywac kopii plikow z `gowin_impl/tang_audio_hw/src/`. Canonical source pozostaje w `rtl/`.
 
-Testbenche sa w katalogu `tb/`. Komendy przykladowe opisano w `docs/simulation_notes.md`. W repozytorium nie ma jeszcze jednego wspolnego skryptu uruchamiajacego wszystkie testy.
+Testbenche sa w katalogu `tb/`. Komendy przykladowe opisano w `docs/simulation_notes.md`.
+
+Uruchamianie podstawowych testow Verilog:
+
+```powershell
+python tools/run_all_tests.py
+```
+
+Skrypt uzywa `iverilog` i `vvp`. Jesli Icarus Verilog nie jest dostepny w PATH,
+wypisze `STATUS=SKIPPED` zamiast udawac poprawne przejscie testow.
 
 ## Ostrzezenia sprzetowe
 
