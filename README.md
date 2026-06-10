@@ -309,6 +309,24 @@ gowin_impl   - projekt narzedziowy Gowin
 
 Katalog `rtl/` jest traktowany jako glowne zrodlo RTL. Szczegoly organizacji sa opisane w `docs/source_structure_notes.md`.
 
+## Demonstracja akceleratora sterowanego rejestrami
+
+`fft_accelerator_core` pokazuje obecny model akceleratora sterowany przez prosty
+bank rejestrów `fft_control_regs`. Jest to odpowiednik idei znanej z laboratoriów
+CORDIC/AXI: zapis rejestru sterującego, oczekiwanie na zakończenie i odczyt
+rejestru statusu. Na tym etapie nie jest to jeszcze konkretna magistrala
+AXI-Lite, tylko stabilna semantyka `CONTROL_REG` / `STATUS_REG` gotowa do
+późniejszego podłączenia do UART, soft CPU albo mostka AXI-like.
+
+Demonstrację uruchamia się razem z pozostałymi testami:
+
+```powershell
+python tools/run_all_tests.py
+```
+
+Reprezentatywny test to `fft_accelerator_core_tb`. Szczegóły przebiegu i mapa
+rejestrów są opisane w `docs/register_control_demo.md`.
+
 ## Budowanie i symulacje
 
 Projekt Gowin znajduje sie w:

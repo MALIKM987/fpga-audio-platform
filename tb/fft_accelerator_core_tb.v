@@ -148,7 +148,18 @@ module fft_accelerator_core_tb;
     endfunction
 
     initial begin
-        $display("=== FFT ACCELERATOR CORE TEST ===");
+        $display("=== REGISTER CONTROLLED FFT ACCELERATOR DEMO ===");
+        $display("MODE=MODEL_PASSTHROUGH");
+        $display("NOTE=FFT and IFFT wrappers are currently passthrough models.");
+        $display("");
+        $display("REGISTER MAP:");
+        $display("0x0 CONTROL_REG");
+        $display("0x1 STATUS_REG");
+        $display("0x2 BASS_GAIN_REG");
+        $display("0x3 MID_GAIN_REG");
+        $display("0x4 TREBLE_GAIN_REG");
+        $display("0x5 TEST_SELECT_REG");
+        $display("0x6 DEBUG_REG");
         $display("");
 
         repeat (3) @(posedge clk);
@@ -175,6 +186,11 @@ module fft_accelerator_core_tb;
             end
         end
 
+        $display("");
+        $display("CONFIGURATION:");
+        $display("WRITE BASS_GAIN_REG=24576    // 1.50 Q2.14");
+        $display("WRITE MID_GAIN_REG=16384     // 1.00 Q2.14");
+        $display("WRITE TREBLE_GAIN_REG=12288  // 0.75 Q2.14");
         write_reg(BASS_GAIN_REG, {16'h0000, GAIN_1_50});
         write_reg(MID_GAIN_REG, {16'h0000, GAIN_1_00});
         write_reg(TREBLE_GAIN_REG, {16'h0000, GAIN_0_75});
@@ -192,12 +208,15 @@ module fft_accelerator_core_tb;
             end
         end
 
+        $display("WRITE CONTROL_REG start=1 spectral_enable=1 bypass=0");
         write_reg(CONTROL_REG, 32'h00000005);
         @(posedge clk);
         #1;
         read_reg(STATUS_REG, read_value);
         report_result("control_start", read_value[0] === 1'b1);
 
+        $display("");
+        $display("PROCESS:");
         for (i = 0; i < FFT_SIZE; i = i + 1) begin
             @(negedge clk);
             sample_valid = 1'b1;
@@ -262,7 +281,19 @@ module fft_accelerator_core_tb;
         output_count_ok = (output_count == FFT_SIZE);
 
         report_result("collect_samples", collect_ok);
+        if (collect_ok) begin
+            $display("collect_samples=%0d PASS", FFT_SIZE);
+        end else begin
+            $display("collect_samples=%0d FAIL", FFT_SIZE);
+        end
+
         report_result("pipeline_done", pipeline_done_ok);
+        if (pipeline_done_ok) begin
+            $display("pipeline_done=1 PASS");
+        end else begin
+            $display("pipeline_done=0 FAIL");
+        end
+
         report_result("output_count", output_count_ok);
         report_result("output_order", output_order_ok);
         report_result("gain_path",
@@ -270,10 +301,21 @@ module fft_accelerator_core_tb;
                       mid_gain_path_ok &&
                       treble_gain_path_ok);
         report_result("overflow", overflow_ok);
+        if (overflow_ok) begin
+            $display("overflow=0 PASS");
+        end else begin
+            $display("overflow=1 FAIL");
+        end
 
         @(posedge clk);
         #1;
         read_reg(STATUS_REG, read_value);
+        $display("");
+        $display("STATUS_REG:");
+        $display("busy=%0d", read_value[0]);
+        $display("done=%0d", read_value[1]);
+        $display("overflow=%0d", read_value[2]);
+        $display("error=%0d", read_value[3]);
         report_result("status_done_latched",
                       (read_value[1] === 1'b1) &&
                       (read_value[2] === 1'b0) &&
@@ -287,6 +329,7 @@ module fft_accelerator_core_tb;
                       (read_value[3] === 1'b0));
 
         $display("");
+        $display("SUMMARY:");
         if (errors == 0) begin
             $display("STATUS=PASS");
         end else begin
