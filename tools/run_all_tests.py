@@ -14,6 +14,13 @@ SIM_DIR = REPO_ROOT / "sim"
 
 TESTS = [
     {
+        "name": "fft_control_regs",
+        "sources": [
+            "rtl/control/fft_control_regs.v",
+            "tb/fft_control_regs_tb.v",
+        ],
+    },
+    {
         "name": "spectral_processor",
         "sources": [
             "rtl/dsp/spectral_gain_select.v",

@@ -48,6 +48,7 @@ Moduły nowego kierunku zaimplementowane w obecnym etapie:
 - `rtl/dsp/fft_accel_wrapper.v` jako model passthrough interfejsu FFT.
 - `rtl/dsp/ifft_accel_wrapper.v` jako model passthrough interfejsu IFFT.
 - `rtl/dsp/fft_ifft_pipeline.v` jako model integracyjny przepływu danych.
+- `rtl/control/fft_control_regs.v` jako bank rejestrów CONTROL/STATUS/PARAM.
 - `tools/run_all_tests.py` jako podstawowy runner testów Verilog.
 
 Moduły nadal oznaczone jako TODO:
@@ -56,6 +57,7 @@ Moduły nadal oznaczone jako TODO:
 - integracja Gowin FFT IP,
 - fizyczny I2S,
 - UART/self-test dla nowego pipeline,
+- AXI-Lite albo UART bridge do banku rejestrów,
 - hardware PCM1808/PCM5102A.
 
 `sample_block_buffer` zbiera ramkę próbek dla przyszłego FFT, a
@@ -63,7 +65,9 @@ Moduły nadal oznaczone jako TODO:
 gain Q2.14 do części rzeczywistej oraz urojonej. Wrappery FFT/IFFT są obecnie
 modelami passthrough, a `fft_ifft_pipeline` sprawdza sterowanie, indeksy i
 przepływ danych przez cały tor. Nie potwierdza to jeszcze matematycznej
-poprawności FFT/IFFT.
+poprawności FFT/IFFT. `fft_control_regs` dodaje prosty interfejs rejestrowy
+CONTROL/STATUS/PARAM podobny metodologicznie do AXI-Lite, ale niezależny od
+konkretnej magistrali.
 
 ## Aktywny self-test
 
@@ -150,6 +154,8 @@ Zaimplementowane:
   przyszłych akceleratorów.
 - `fft_ifft_pipeline` jako model integracyjny:
   `sample_block_buffer -> fft_accel_wrapper -> spectral_processor -> ifft_accel_wrapper`.
+- `fft_control_regs` jako rejestrowy interfejs sterujący z CONTROL, STATUS,
+  gainami i wyborem testu.
 - `tools/run_all_tests.py` jako runner podstawowych testbenchy Verilog.
 
 Niezaimplementowane jeszcze:
@@ -161,6 +167,7 @@ Niezaimplementowane jeszcze:
 - Gowin FFT IP.
 - Fizyczny I2S dla nowego pipeline.
 - UART/self-test zintegrowany z nowym pipeline.
+- UART bridge albo AXI-like bridge do `fft_control_regs`.
 - Hardware PCM1808/PCM5102A w ścieżce FFT/IFFT.
 - Overlap-add.
 

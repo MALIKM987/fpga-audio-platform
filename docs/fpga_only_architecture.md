@@ -91,6 +91,7 @@ Zaimplementowane moduły dla architektury FPGA-only FFT/IFFT:
 - `rtl/dsp/fft_accel_wrapper.v` jako model passthrough interfejsu FFT.
 - `rtl/dsp/ifft_accel_wrapper.v` jako model passthrough interfejsu IFFT.
 - `rtl/dsp/fft_ifft_pipeline.v` jako model integracyjny pipeline.
+- `rtl/control/fft_control_regs.v` jako bank rejestrów CONTROL/STATUS/PARAM.
 - `tools/run_all_tests.py` jako runner podstawowych testów Verilog.
 
 Moduły nadal oznaczone jako TODO:
@@ -99,15 +100,18 @@ Moduły nadal oznaczone jako TODO:
 - integracja Gowin FFT IP,
 - fizyczny I2S,
 - UART/self-test dla nowego pipeline,
+- UART bridge albo AXI-like bridge do banku rejestrów,
 - hardware PCM1808/PCM5102A.
 
 `sample_block_buffer` ma testbench dla zbierania i odczytu ramki FFT. Para
 `spectral_gain_select` + `spectral_processor` ma testbench sprawdzający wybór
 pasma, biny lustrzane i mnożenie zespolonych wartości przez gain Q2.14.
 Wrappery FFT/IFFT i `fft_ifft_pipeline` mają testbenche modelowe, które
-sprawdzają kolejność ramek oraz przepływ danych. Kolejne moduły powinny być
-dodawane etapami; każdy nowy moduł Verilog powinien mieć własny testbench albo
-być pokryty testbenchem wyższego poziomu.
+sprawdzają kolejność ramek oraz przepływ danych. `fft_control_regs` ma testbench
+dla domyślnych parametrów, zapisu gainów, impulsu start, zatrzasków statusu i
+czyszczenia statusu. Kolejne moduły powinny być dodawane etapami; każdy nowy
+moduł Verilog powinien mieć własny testbench albo być pokryty testbenchem
+wyższego poziomu.
 
 ## Parametry Pierwszej Wersji
 
@@ -141,6 +145,11 @@ treble_gain_R
 Pierwsza implementacja może modelować te wartości jako proste rejestry
 sterowane z testbencha albo kontrolera self-testu. Późniejszy system może
 wystawić je przez UART, przyciski albo interfejs memory-mapped.
+
+Obecny moduł `fft_control_regs` realizuje pierwszy krok tej warstwy: rejestry
+CONTROL, STATUS, gainy BASS/MID/TREBLE, wybór testu i rejestr DEBUG. Interfejs
+jest prosty (`wr_en`, `rd_en`, adres i dane), niezależny od konkretnej magistrali
+i może później zostać podłączony do UART, przycisków albo AXI-like bridge.
 
 ## Spectral Processor
 
