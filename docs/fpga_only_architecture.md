@@ -47,7 +47,9 @@ integracja sprzętowa mogła użyć tego samego układu danych.
 
 ## Aktualny Stan
 
-Pipeline FFT/IFFT nie jest jeszcze zaimplementowany w RTL.
+Pełny pipeline FFT/IFFT nie jest jeszcze zaimplementowany w RTL. Pierwsze bloki
+pomocnicze nowej ścieżki są już gotowe: bufor ramki próbek oraz prosty procesor
+widmowy wybierający pasmo binu FFT i stosujący gain Q2.14.
 
 Obecnie aktywna logika to samodzielny self-test diagnostyczny:
 
@@ -80,16 +82,22 @@ diagnostyczny UART.
 
 ## Planowane Moduły RTL
 
-Planowane moduły dla architektury FPGA-only FFT/IFFT:
+Zaimplementowane moduły dla architektury FPGA-only FFT/IFFT:
 
 - `rtl/dsp/sample_block_buffer.v`
 - `rtl/dsp/spectral_gain_select.v`
 - `rtl/dsp/spectral_processor.v`
+
+Moduły nadal oznaczone jako TODO:
+
 - `rtl/dsp/fft_accel_wrapper.v`
 - `rtl/dsp/ifft_accel_wrapper.v`
 - `rtl/dsp/fft_ifft_pipeline.v`
 
-Moduły powinny być dodawane etapami. Każdy nowy moduł Verilog powinien mieć
+`sample_block_buffer` ma testbench dla zbierania i odczytu ramki FFT. Para
+`spectral_gain_select` + `spectral_processor` ma testbench sprawdzający wybór
+pasma, biny lustrzane i mnożenie zespolonych wartości przez gain Q2.14. Kolejne
+moduły powinny być dodawane etapami; każdy nowy moduł Verilog powinien mieć
 własny testbench albo być pokryty testbenchem wyższego poziomu.
 
 ## Parametry Pierwszej Wersji
@@ -127,16 +135,22 @@ wystawić je przez UART, przyciski albo interfejs memory-mapped.
 
 ## Spectral Processor
 
-`spectral_processor` będzie modyfikować biny FFT zgodnie z ustawionymi pasmami
+`spectral_processor` modyfikuje biny FFT zgodnie z ustawionymi pasmami
 częstotliwości.
 
-Oczekiwane pierwsze zachowanie:
+Obecne zachowanie:
 
 - bass gain wpływa na niskie biny,
 - mid gain wpływa na środkowe biny,
 - treble gain wpływa na wysokie biny,
-- volume może być zastosowane globalnie albo po IFFT,
-- clipping/overflow powinien być wykrywany i raportowany.
+- efektywny indeks binu uwzględnia symetrię widma,
+- gain jest stosowany do części rzeczywistej i urojonej w formacie Q2.14.
+
+Nadal TODO:
+
+- volume jako globalny gain albo etap po IFFT,
+- clipping/overflow w torze widmowym,
+- połączenie z prawdziwym wrapperem FFT/IFFT.
 
 To jeszcze nie jest efekt audio czasu rzeczywistego. To testowa ścieżka
 blokowa do udowodnienia zachowania FFT -> modyfikacja binów -> IFFT.
