@@ -354,6 +354,27 @@ python tools/run_all_tests.py
 
 Szczegóły są opisane w `docs/fft_reference_model.md`.
 
+## Wektory testowe i porównanie RTL
+
+Projekt generuje powtarzalne wektory CSV dla ramek `impulse`, `constant`,
+`single_bin_low`, `single_bin_mid`, `single_bin_high` i `mixed`. Dla każdej
+ramki powstaje oczekiwany wynik obecnego RTL oraz osobny wynik matematycznego
+modelu FFT/IFFT.
+
+Obecny RTL jest porównywany z modelem `rtl_passthrough_model`, ponieważ
+`fft_accel_wrapper.v` i `ifft_accel_wrapper.v` nadal są modelami passthrough.
+Model matematyczny `math_reference_model` pozostaje golden reference dla
+przyszłego Gowin FFT IP albo własnej implementacji RTL FFT/IFFT, ale nie jest
+jeszcze kryterium PASS/FAIL dla obecnego pipeline.
+
+Pełny przepływ uruchamia:
+
+```powershell
+python tools/run_all_tests.py
+```
+
+Szczegóły są opisane w `docs/fft_test_vectors.md`.
+
 ## Budowanie i symulacje
 
 Projekt Gowin znajduje sie w:
