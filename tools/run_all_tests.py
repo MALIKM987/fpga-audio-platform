@@ -42,6 +42,18 @@ TESTS = [
             "tb/ifft_accel_wrapper_tb.v",
         ],
     },
+    {
+        "name": "fft_ifft_pipeline",
+        "sources": [
+            "rtl/dsp/sample_block_buffer.v",
+            "rtl/dsp/spectral_gain_select.v",
+            "rtl/dsp/spectral_processor.v",
+            "rtl/dsp/fft_accel_wrapper.v",
+            "rtl/dsp/ifft_accel_wrapper.v",
+            "rtl/dsp/fft_ifft_pipeline.v",
+            "tb/fft_ifft_pipeline_tb.v",
+        ],
+    },
 ]
 
 
