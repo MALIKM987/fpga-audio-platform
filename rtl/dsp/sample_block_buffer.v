@@ -101,7 +101,9 @@ module sample_block_buffer #(
                         write_count <= {COUNT_WIDTH{1'b0}};
                         read_count  <= {COUNT_WIDTH{1'b0}};
                         frame_ready <= 1'b0;
-                        overflow    <= 1'b0;
+                        if (!sample_valid) begin
+                            overflow <= 1'b0;
+                        end
                     end else begin
                         read_count <= read_count + 1'b1;
                     end

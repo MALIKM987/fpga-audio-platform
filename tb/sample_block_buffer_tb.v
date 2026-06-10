@@ -23,6 +23,7 @@ module sample_block_buffer_tb;
     integer errors = 0;
     integer read_order_ok;
     integer marker_ok;
+    integer final_overflow_ok;
     integer i;
 
     sample_block_buffer #(
@@ -134,6 +135,85 @@ module sample_block_buffer_tb;
         end
     endtask
 
+    task read_frame_with_final_overflow;
+        input integer base_value;
+        output integer order_ok;
+        output integer markers_ok;
+        output integer overflow_ok;
+        begin
+            order_ok = 1;
+            markers_ok = 1;
+            overflow_ok = 0;
+
+            @(negedge clk);
+            consume_frame = 1'b1;
+
+            for (i = 0; i < FFT_SIZE; i = i + 1) begin
+                if (i == FFT_SIZE - 1) begin
+                    @(negedge clk);
+                    sample_valid = 1'b1;
+                    sample_in = 16'sd12345;
+                end
+
+                @(posedge clk);
+                #1;
+
+                if (frame_valid !== 1'b1) begin
+                    order_ok = 0;
+                    $display("  final overflow read error: frame_valid=0 at index %0d", i);
+                end
+
+                if (frame_index !== i[ADDR_WIDTH-1:0]) begin
+                    order_ok = 0;
+                    $display("  final overflow read error: frame_index=%0d expected=%0d",
+                             frame_index, i);
+                end
+
+                if (frame_sample !== (base_value + i)) begin
+                    order_ok = 0;
+                    $display("  final overflow read error: frame_sample=%0d expected=%0d",
+                             frame_sample, base_value + i);
+                end
+
+                if ((i == 0) && (frame_start !== 1'b1)) begin
+                    markers_ok = 0;
+                    $display("  final overflow marker error: frame_start was not set at index 0");
+                end
+
+                if ((i != 0) && (frame_start !== 1'b0)) begin
+                    markers_ok = 0;
+                    $display("  final overflow marker error: frame_start set at index %0d", i);
+                end
+
+                if ((i == FFT_SIZE - 1) && (frame_end !== 1'b1)) begin
+                    markers_ok = 0;
+                    $display("  final overflow marker error: frame_end was not set at last index");
+                end
+
+                if ((i != FFT_SIZE - 1) && (frame_end !== 1'b0)) begin
+                    markers_ok = 0;
+                    $display("  final overflow marker error: frame_end set at index %0d", i);
+                end
+
+                if (i == FFT_SIZE - 1) begin
+                    overflow_ok = (overflow === 1'b1);
+                    if (!overflow_ok) begin
+                        $display("  overflow error: lost final-read sample was not reported");
+                    end
+                end
+
+                if (i == 0) begin
+                    @(negedge clk);
+                    consume_frame = 1'b0;
+                end
+            end
+
+            @(negedge clk);
+            sample_valid = 1'b0;
+            sample_in = 16'sd0;
+        end
+    endtask
+
     initial begin
         $display("=== SAMPLE BLOCK BUFFER TEST ===");
         $display("FFT_SIZE=%0d", FFT_SIZE);
@@ -175,6 +255,11 @@ module sample_block_buffer_tb;
         write_frame(1000);
         read_frame(1000, read_order_ok, marker_ok);
         report_result("second_frame", read_order_ok && marker_ok);
+
+        write_frame(2000);
+        read_frame_with_final_overflow(2000, read_order_ok, marker_ok, final_overflow_ok);
+        report_result("final_read_overflow",
+                      read_order_ok && marker_ok && final_overflow_ok);
 
         $display("");
         if (errors == 0) begin
