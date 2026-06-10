@@ -28,6 +28,20 @@ TESTS = [
             "tb/sample_block_buffer_tb.v",
         ],
     },
+    {
+        "name": "fft_accel_wrapper",
+        "sources": [
+            "rtl/dsp/fft_accel_wrapper.v",
+            "tb/fft_accel_wrapper_tb.v",
+        ],
+    },
+    {
+        "name": "ifft_accel_wrapper",
+        "sources": [
+            "rtl/dsp/ifft_accel_wrapper.v",
+            "tb/ifft_accel_wrapper_tb.v",
+        ],
+    },
 ]
 
 
