@@ -95,6 +95,8 @@ Zaimplementowane moduły dla architektury FPGA-only FFT/IFFT:
 - `rtl/control/fft_accelerator_core.v` jako nadrzędny model akceleratora
   sterowany rejestrami.
 - `tools/run_all_tests.py` jako runner podstawowych testów Verilog.
+- GitHub Actions uruchamiające testy Verilog na branchu
+  `fpga-only-fft-console`.
 
 Moduły nadal oznaczone jako TODO:
 
@@ -102,7 +104,8 @@ Moduły nadal oznaczone jako TODO:
 - integracja Gowin FFT IP,
 - fizyczny I2S,
 - UART/self-test dla nowego pipeline,
-- UART bridge albo AXI-like bridge do banku rejestrów,
+- AXI-Lite,
+- UART bridge do banku rejestrów,
 - hardware PCM1808/PCM5102A.
 
 `sample_block_buffer` ma testbench dla zbierania i odczytu ramki FFT. Para

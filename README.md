@@ -52,6 +52,8 @@ Moduły nowego kierunku zaimplementowane w obecnym etapie:
 - `rtl/control/fft_accelerator_core.v` jako moduł nadrzędny akceleratora
   sterowany rejestrami.
 - `tools/run_all_tests.py` jako podstawowy runner testów Verilog.
+- GitHub Actions uruchamiające testy Verilog dla pull requestów i pushy na
+  branch `fpga-only-fft-console`.
 
 Moduły nadal oznaczone jako TODO:
 
@@ -59,7 +61,8 @@ Moduły nadal oznaczone jako TODO:
 - integracja Gowin FFT IP,
 - fizyczny I2S,
 - UART/self-test dla nowego pipeline,
-- AXI-Lite albo UART bridge do banku rejestrów,
+- AXI-Lite,
+- UART bridge do banku rejestrów,
 - hardware PCM1808/PCM5102A.
 
 `sample_block_buffer` zbiera ramkę próbek dla przyszłego FFT, a
@@ -163,6 +166,7 @@ Zaimplementowane:
 - `fft_accelerator_core` jako nadrzędny model akceleratora:
   rejestry sterujące + `fft_ifft_pipeline`.
 - `tools/run_all_tests.py` jako runner podstawowych testbenchy Verilog.
+- GitHub Actions jako automatyczne uruchamianie testów Verilog na GitHubie.
 
 Niezaimplementowane jeszcze:
 
@@ -171,9 +175,10 @@ Niezaimplementowane jeszcze:
 - Pelne przypisanie pinow dla PCM1808/PCM5102A.
 - Prawdziwy FFT/IFFT.
 - Gowin FFT IP.
+- AXI-Lite.
+- UART bridge do banku rejestrów.
 - Fizyczny I2S dla nowego pipeline.
 - UART/self-test zintegrowany z nowym pipeline.
-- UART bridge albo AXI-like bridge do `fft_control_regs`.
 - Hardware PCM1808/PCM5102A w ścieżce FFT/IFFT.
 - Overlap-add.
 
@@ -347,6 +352,9 @@ python tools/run_all_tests.py
 
 Skrypt uzywa `iverilog` i `vvp`. Jesli Icarus Verilog nie jest dostepny w PATH,
 wypisze `STATUS=SKIPPED` zamiast udawac poprawne przejscie testow.
+
+Na GitHubie ten sam runner jest uruchamiany przez GitHub Actions dla pushy oraz
+pull requestów do `fpga-only-fft-console`.
 
 ## Ostrzezenia sprzetowe
 
