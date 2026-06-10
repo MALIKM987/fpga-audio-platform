@@ -52,6 +52,8 @@ Moduły nowego kierunku zaimplementowane w obecnym etapie:
 - `rtl/control/fft_accelerator_core.v` jako moduł nadrzędny akceleratora
   sterowany rejestrami.
 - `tools/run_all_tests.py` jako podstawowy runner testów Verilog.
+- `tools/fft_reference_model.py` jako Pythonowy golden model matematyczny
+  toru FFT -> spectral gain -> IFFT.
 - GitHub Actions uruchamiające testy Verilog dla pull requestów i pushy na
   branch `fpga-only-fft-console`.
 
@@ -332,6 +334,26 @@ python tools/run_all_tests.py
 Reprezentatywny test to `fft_accelerator_core_tb`. Szczegóły przebiegu i mapa
 rejestrów są opisane w `docs/register_control_demo.md`.
 
+## Model referencyjny FFT/IFFT
+
+`tools/fft_reference_model.py` jest Pythonowym golden model dla toru
+`DFT -> spectral gain -> IDFT`. Działa na czystym Pythonie 3, bez `numpy` i
+`scipy`, dzięki czemu może być uruchamiany w prostym środowisku testowym oraz w
+GitHub Actions.
+
+Model służy do późniejszego porównania wyników z Gowin FFT IP albo własną
+implementacją RTL FFT/IFFT. Aktualne wrappery RTL `fft_accel_wrapper.v` i
+`ifft_accel_wrapper.v` nadal są modelami passthrough i nie wykonują jeszcze
+prawdziwej FFT/IFFT.
+
+Testy modelu uruchamia ten sam runner:
+
+```powershell
+python tools/run_all_tests.py
+```
+
+Szczegóły są opisane w `docs/fft_reference_model.md`.
+
 ## Budowanie i symulacje
 
 Projekt Gowin znajduje sie w:
@@ -344,7 +366,7 @@ Aktualny projekt narzedziowy moze uzywac kopii plikow z `gowin_impl/tang_audio_h
 
 Testbenche sa w katalogu `tb/`. Komendy przykladowe opisano w `docs/simulation_notes.md`.
 
-Uruchamianie podstawowych testow Verilog:
+Uruchamianie podstawowych testów Python/Verilog:
 
 ```powershell
 python tools/run_all_tests.py
