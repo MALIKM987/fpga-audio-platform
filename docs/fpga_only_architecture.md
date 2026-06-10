@@ -47,7 +47,10 @@ integracja sprzętowa mogła użyć tego samego układu danych.
 
 ## Aktualny Stan
 
-Pipeline FFT/IFFT nie jest jeszcze zaimplementowany w RTL.
+Model integracyjny pipeline FFT/IFFT jest już zaimplementowany w RTL, ale nadal
+nie zawiera prawdziwego algorytmu FFT/IFFT. Obecne wrappery FFT/IFFT są modelami
+passthrough, a pipeline służy do sprawdzenia sterowania, indeksów, `valid/done`
+i przepływu danych przez bloki DSP.
 
 Obecnie aktywna logika to samodzielny self-test diagnostyczny:
 
@@ -80,17 +83,35 @@ diagnostyczny UART.
 
 ## Planowane Moduły RTL
 
-Planowane moduły dla architektury FPGA-only FFT/IFFT:
+Zaimplementowane moduły dla architektury FPGA-only FFT/IFFT:
 
 - `rtl/dsp/sample_block_buffer.v`
 - `rtl/dsp/spectral_gain_select.v`
 - `rtl/dsp/spectral_processor.v`
-- `rtl/dsp/fft_accel_wrapper.v`
-- `rtl/dsp/ifft_accel_wrapper.v`
-- `rtl/dsp/fft_ifft_pipeline.v`
+- `rtl/dsp/fft_accel_wrapper.v` jako model passthrough interfejsu FFT.
+- `rtl/dsp/ifft_accel_wrapper.v` jako model passthrough interfejsu IFFT.
+- `rtl/dsp/fft_ifft_pipeline.v` jako model integracyjny pipeline.
+- `rtl/control/fft_control_regs.v` jako bank rejestrów CONTROL/STATUS/PARAM.
+- `tools/run_all_tests.py` jako runner podstawowych testów Verilog.
 
-Moduły powinny być dodawane etapami. Każdy nowy moduł Verilog powinien mieć
-własny testbench albo być pokryty testbenchem wyższego poziomu.
+Moduły nadal oznaczone jako TODO:
+
+- prawdziwy algorytm FFT/IFFT,
+- integracja Gowin FFT IP,
+- fizyczny I2S,
+- UART/self-test dla nowego pipeline,
+- UART bridge albo AXI-like bridge do banku rejestrów,
+- hardware PCM1808/PCM5102A.
+
+`sample_block_buffer` ma testbench dla zbierania i odczytu ramki FFT. Para
+`spectral_gain_select` + `spectral_processor` ma testbench sprawdzający wybór
+pasma, biny lustrzane i mnożenie zespolonych wartości przez gain Q2.14.
+Wrappery FFT/IFFT i `fft_ifft_pipeline` mają testbenche modelowe, które
+sprawdzają kolejność ramek oraz przepływ danych. `fft_control_regs` ma testbench
+dla domyślnych parametrów, zapisu gainów, impulsu start, zatrzasków statusu i
+czyszczenia statusu. Kolejne moduły powinny być dodawane etapami; każdy nowy
+moduł Verilog powinien mieć własny testbench albo być pokryty testbenchem
+wyższego poziomu.
 
 ## Parametry Pierwszej Wersji
 
@@ -125,18 +146,29 @@ Pierwsza implementacja może modelować te wartości jako proste rejestry
 sterowane z testbencha albo kontrolera self-testu. Późniejszy system może
 wystawić je przez UART, przyciski albo interfejs memory-mapped.
 
+Obecny moduł `fft_control_regs` realizuje pierwszy krok tej warstwy: rejestry
+CONTROL, STATUS, gainy BASS/MID/TREBLE, wybór testu i rejestr DEBUG. Interfejs
+jest prosty (`wr_en`, `rd_en`, adres i dane), niezależny od konkretnej magistrali
+i może później zostać podłączony do UART, przycisków albo AXI-like bridge.
+
 ## Spectral Processor
 
-`spectral_processor` będzie modyfikować biny FFT zgodnie z ustawionymi pasmami
+`spectral_processor` modyfikuje biny FFT zgodnie z ustawionymi pasmami
 częstotliwości.
 
-Oczekiwane pierwsze zachowanie:
+Obecne zachowanie:
 
 - bass gain wpływa na niskie biny,
 - mid gain wpływa na środkowe biny,
 - treble gain wpływa na wysokie biny,
-- volume może być zastosowane globalnie albo po IFFT,
-- clipping/overflow powinien być wykrywany i raportowany.
+- efektywny indeks binu uwzględnia symetrię widma,
+- gain jest stosowany do części rzeczywistej i urojonej w formacie Q2.14.
+
+Nadal TODO:
+
+- volume jako globalny gain albo etap po IFFT,
+- clipping/overflow w torze widmowym,
+- zastąpienie passthrough wrapperów prawdziwym FFT/IFFT albo Gowin FFT IP.
 
 To jeszcze nie jest efekt audio czasu rzeczywistego. To testowa ścieżka
 blokowa do udowodnienia zachowania FFT -> modyfikacja binów -> IFFT.

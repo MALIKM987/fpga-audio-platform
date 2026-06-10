@@ -40,17 +40,34 @@ PCM5102A, ciągłego streamingu audio ani oscyloskopowego toru pomiarowego.
 
 ## Planowana architektura FFT/IFFT
 
-Planowane moduły nowego kierunku:
+Moduły nowego kierunku zaimplementowane w obecnym etapie:
 
 - `rtl/dsp/sample_block_buffer.v`
 - `rtl/dsp/spectral_gain_select.v`
 - `rtl/dsp/spectral_processor.v`
-- `rtl/dsp/fft_accel_wrapper.v`
-- `rtl/dsp/ifft_accel_wrapper.v`
-- `rtl/dsp/fft_ifft_pipeline.v`
+- `rtl/dsp/fft_accel_wrapper.v` jako model passthrough interfejsu FFT.
+- `rtl/dsp/ifft_accel_wrapper.v` jako model passthrough interfejsu IFFT.
+- `rtl/dsp/fft_ifft_pipeline.v` jako model integracyjny przepływu danych.
+- `rtl/control/fft_control_regs.v` jako bank rejestrów CONTROL/STATUS/PARAM.
+- `tools/run_all_tests.py` jako podstawowy runner testów Verilog.
 
-Moduły te nie są jeszcze zaimplementowane. Każdy nowy moduł Verilog powinien
-dostać własny testbench albo być pokryty testbenchem wyższego poziomu.
+Moduły nadal oznaczone jako TODO:
+
+- prawdziwy algorytm FFT/IFFT,
+- integracja Gowin FFT IP,
+- fizyczny I2S,
+- UART/self-test dla nowego pipeline,
+- AXI-Lite albo UART bridge do banku rejestrów,
+- hardware PCM1808/PCM5102A.
+
+`sample_block_buffer` zbiera ramkę próbek dla przyszłego FFT, a
+`spectral_gain_select` i `spectral_processor` wybierają pasmo binu FFT i stosują
+gain Q2.14 do części rzeczywistej oraz urojonej. Wrappery FFT/IFFT są obecnie
+modelami passthrough, a `fft_ifft_pipeline` sprawdza sterowanie, indeksy i
+przepływ danych przez cały tor. Nie potwierdza to jeszcze matematycznej
+poprawności FFT/IFFT. `fft_control_regs` dodaje prosty interfejs rejestrowy
+CONTROL/STATUS/PARAM podobny metodologicznie do AXI-Lite, ale niezależny od
+konkretnej magistrali.
 
 ## Aktywny self-test
 
@@ -130,6 +147,16 @@ Zaimplementowane:
 - Obsluga przyciskow i rejestrow parametrow L/R.
 - Topy demonstracyjne dla lokalnych zrodel sygnalu z FPGA.
 - `fft_ifft_accel_stub.v` jako stub/interfejs przyszlego akceleratora FFT/IFFT.
+- `sample_block_buffer` jako bufor ramki próbek dla przyszłego FFT.
+- `spectral_gain_select` i `spectral_processor` jako pierwszy blok modyfikacji
+  binów widmowych przez gain Q2.14.
+- `fft_accel_wrapper` i `ifft_accel_wrapper` jako modele passthrough interfejsów
+  przyszłych akceleratorów.
+- `fft_ifft_pipeline` jako model integracyjny:
+  `sample_block_buffer -> fft_accel_wrapper -> spectral_processor -> ifft_accel_wrapper`.
+- `fft_control_regs` jako rejestrowy interfejs sterujący z CONTROL, STATUS,
+  gainami i wyborem testu.
+- `tools/run_all_tests.py` jako runner podstawowych testbenchy Verilog.
 
 Niezaimplementowane jeszcze:
 
@@ -137,8 +164,11 @@ Niezaimplementowane jeszcze:
 - Pelny BYPASS ADC -> FPGA -> DAC.
 - Pelne przypisanie pinow dla PCM1808/PCM5102A.
 - Prawdziwy FFT/IFFT.
-- `sample_buffer`.
-- `spectral_processor`.
+- Gowin FFT IP.
+- Fizyczny I2S dla nowego pipeline.
+- UART/self-test zintegrowany z nowym pipeline.
+- UART bridge albo AXI-like bridge do `fft_control_regs`.
+- Hardware PCM1808/PCM5102A w ścieżce FFT/IFFT.
 - Overlap-add.
 
 ## Tryby pracy
@@ -283,7 +313,16 @@ gowin_impl/tang_audio_hw/
 
 Aktualny projekt narzedziowy moze uzywac kopii plikow z `gowin_impl/tang_audio_hw/src/`. Canonical source pozostaje w `rtl/`.
 
-Testbenche sa w katalogu `tb/`. Komendy przykladowe opisano w `docs/simulation_notes.md`. W repozytorium nie ma jeszcze jednego wspolnego skryptu uruchamiajacego wszystkie testy.
+Testbenche sa w katalogu `tb/`. Komendy przykladowe opisano w `docs/simulation_notes.md`.
+
+Uruchamianie podstawowych testow Verilog:
+
+```powershell
+python tools/run_all_tests.py
+```
+
+Skrypt uzywa `iverilog` i `vvp`. Jesli Icarus Verilog nie jest dostepny w PATH,
+wypisze `STATUS=SKIPPED` zamiast udawac poprawne przejscie testow.
 
 ## Ostrzezenia sprzetowe
 
@@ -299,13 +338,16 @@ Testbenche sa w katalogu `tb/`. Komendy przykladowe opisano w `docs/simulation_n
 - Tor PCM1808 -> FPGA -> PCM5102A nie jest jeszcze zaimplementowany.
 - Aktualne topy EQ/testowe korzystaja z lokalnego generatora w FPGA.
 - Obecny `i2s_tx` wymaga dalszej pracy nad handshake/sample tick.
-- FFT/IFFT jest zaplanowane, ale niezaimplementowane. Obecny `fft_ifft_accel_stub.v` jest tylko interfejsem/stubem.
+- Prawdziwe FFT/IFFT nie jest jeszcze zaimplementowane. Obecne wrappery FFT/IFFT
+  oraz `fft_ifft_pipeline` są modelami passthrough do weryfikacji interfejsu,
+  sterowania i kolejności próbek.
 
 ## Nastepne kroki
 
-- Dopracowac plan weryfikacji FPGA-only.
-- Dodac pierwszy maly modul nowej architektury, np. `sample_block_buffer`.
-- Dodac testbench i raport konsolowy PASS/FAIL dla kazdego nowego modulu.
+- Dopracowac plan weryfikacji FPGA-only po dodaniu modelu integracyjnego.
+- Zastapic modele passthrough prawdziwym FFT/IFFT albo Gowin FFT IP.
+- Dodac UART/self-test dla nowego pipeline.
+- Utrzymywac raport konsolowy PASS/FAIL dla kazdego nowego modulu.
 - Dopiero po stabilnym pipeline FFT/IFFT wrocic do warstwy PCM1808/PCM5102A.
 
 ## Autor
