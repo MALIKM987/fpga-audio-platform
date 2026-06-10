@@ -2,6 +2,87 @@
 
 Projekt jest rozwijany jako stereofoniczna platforma audio na FPGA Tang Nano 20K. Docelowy tor pomiarowy wykorzystuje ADC PCM1808 do akwizycji sygnalu analogowego L/R, przetwarzanie w FPGA oraz DAC PCM5102A do wyjscia analogowego L/R mierzonego oscyloskopem.
 
+## Obecny cel projektu
+
+Aktualny priorytet to akcelerator FFT/IFFT działający wyłącznie w FPGA,
+przetwarzający bloki danych audio w formacie I2S-like i sprawdzalny z poziomu
+symulacji oraz raportów konsolowych. Fizyczny tor PCM1808/PCM5102A/I2S zostaje
+zachowany jako przyszła warstwa sprzętowa, ale nie jest aktualnym zakresem
+implementacji.
+
+Docelowy pipeline dla obecnego etapu:
+
+```text
+test generator / I2S-like input model
+    -> sample_block_buffer
+    -> FFT accelerator wrapper
+    -> spectral_processor
+    -> IFFT accelerator wrapper
+    -> I2S-like output model
+    -> console report / UART report
+```
+
+Pierwsza wersja ma używać `FFT_SIZE = 256`, signed 16-bit próbek stereo L/R,
+arytmetyki fixed-point i wartości gain w formacie Q2.14.
+
+## Aktualny zakres
+
+W tym etapie skupiamy się na:
+
+- logice DSP i sterującej działającej bez zewnętrznego ADC/DAC,
+- testach uruchamianych z poziomu konsoli,
+- modelach ramek audio I2S-like zamiast fizycznego I2S,
+- self-teście diagnostycznym jako obecnej bazie bring-up,
+- dokumentacji i weryfikacji przed implementacją właściwego FFT/IFFT.
+
+Nie implementujemy teraz fizycznego wejścia PCM1808, fizycznego wyjścia
+PCM5102A, ciągłego streamingu audio ani oscyloskopowego toru pomiarowego.
+
+## Planowana architektura FFT/IFFT
+
+Planowane moduły nowego kierunku:
+
+- `rtl/dsp/sample_block_buffer.v`
+- `rtl/dsp/spectral_gain_select.v`
+- `rtl/dsp/spectral_processor.v`
+- `rtl/dsp/fft_accel_wrapper.v`
+- `rtl/dsp/ifft_accel_wrapper.v`
+- `rtl/dsp/fft_ifft_pipeline.v`
+
+Moduły te nie są jeszcze zaimplementowane. Każdy nowy moduł Verilog powinien
+dostać własny testbench albo być pokryty testbenchem wyższego poziomu.
+
+## Aktywny self-test
+
+Obecnie aktywny etap przejściowy to self-test diagnostyczny:
+
+```text
+test_signal_gen
+    -> auto_param_controller
+    -> modulation_core
+    -> debug_analyzer
+    -> uart_debug_formatter
+    -> uart_tx
+```
+
+Self-test generuje wewnętrzny sygnał testowy, automatycznie zmienia parametry
+VOL/BASS/MID/TREBLE, uruchamia prosty blok DSP, zbiera min/max/clipping i
+przygotowuje raport diagnostyczny przez UART.
+
+## Hardware TODO / future work
+
+Stary tor fizyczny pozostaje ważny jako future work:
+
+- PCM1808 ADC jako przyszła warstwa wejściowa,
+- PCM5102A DAC jako przyszła warstwa wyjściowa,
+- prawdziwe piny I2S i constraints,
+- testy oscyloskopem,
+- ciągły streaming audio,
+- windowing i overlap-add,
+- integracja FFT/IFFT z realnym torem audio dopiero po weryfikacji FPGA-only.
+
+Szczegóły są opisane w `docs/hardware_todo.md`.
+
 ## Aktualna koncepcja hardware
 
 ```text
@@ -77,9 +158,10 @@ Niezaimplementowane jeszcze:
 - `parameter_registers` - rejestry volume/EQ/trybow.
 - `led_controller` - sygnalizacja trybu, aktywnego kanalu i clippingu.
 
-## Priorytet najblizszego uruchomienia
+## Priorytet przyszlego uruchomienia hardware
 
-Najpierw BYPASS bez FFT:
+Po zweryfikowaniu architektury FPGA-only pierwszym testem fizycznego toru audio
+powinien byc BYPASS bez FFT:
 
 ```text
 PCM1808
@@ -89,7 +171,8 @@ PCM1808
     -> PCM5102A
 ```
 
-Dopiero po stabilnym BYPASS nalezy wlaczac EQ/DAFX, a pozniej przechodzic do FFT/IFFT.
+Dopiero po stabilnym BYPASS nalezy wracac do EQ/DAFX i fizycznej integracji
+FFT/IFFT z ADC/DAC.
 
 ## Self-test bez sprzetu zewnetrznego
 
@@ -220,14 +303,10 @@ Testbenche sa w katalogu `tb/`. Komendy przykladowe opisano w `docs/simulation_n
 
 ## Nastepne kroki
 
-- Uzupelnic dokumentacje polaczen sprzetowych.
-- Wybrac architekture zegarow I2S.
-- Zaimplementowac `i2s_rx_stereo`.
-- Zaimplementowac `audio_pipeline_bypass`.
-- Dodac top BYPASS dla PCM1808 -> FPGA -> PCM5102A.
-- Przetestowac generator 1 kHz -> ADC -> FPGA -> DAC -> oscyloskop.
-- Po stabilnym BYPASS wlaczyc EQ.
-- Dopiero pozniej rozwijac FFT/IFFT.
+- Dopracowac plan weryfikacji FPGA-only.
+- Dodac pierwszy maly modul nowej architektury, np. `sample_block_buffer`.
+- Dodac testbench i raport konsolowy PASS/FAIL dla kazdego nowego modulu.
+- Dopiero po stabilnym pipeline FFT/IFFT wrocic do warstwy PCM1808/PCM5102A.
 
 ## Autor
 
