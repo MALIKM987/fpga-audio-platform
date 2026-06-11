@@ -38,6 +38,15 @@ W tym etapie skupiamy się na:
 Nie implementujemy teraz fizycznego wejścia PCM1808, fizycznego wyjścia
 PCM5102A, ciągłego streamingu audio ani oscyloskopowego toru pomiarowego.
 
+## Status projektu / milestone summary
+
+Czytelne podsumowanie aktualnego stanu projektu, architektury, testów,
+ograniczeń i kolejnych kroków znajduje się w:
+
+```text
+docs/project_milestone_summary.md
+```
+
 ## Planowana architektura FFT/IFFT
 
 Moduły nowego kierunku zaimplementowane w obecnym etapie:
