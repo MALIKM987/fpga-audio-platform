@@ -28,6 +28,14 @@ VECTOR_TESTS = [
 
 VERILOG_TESTS = [
     {
+        "name": "fft_radix2_core",
+        "sources": [
+            "rtl/dsp/fft_bit_reverse.v",
+            "rtl/dsp/fft_radix2_core.v",
+            "tb/fft_radix2_core_tb.v",
+        ],
+    },
+    {
         "name": "fft_bit_reverse",
         "sources": [
             "rtl/dsp/fft_bit_reverse.v",
