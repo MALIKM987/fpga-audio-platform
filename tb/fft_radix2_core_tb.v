@@ -35,6 +35,7 @@ module fft_radix2_core_tb;
     integer compute_walk_delay_ok = 0;
     integer output_order_ok = 1;
     integer output_data_ok = 1;
+    integer output_data_error_count = 0;
     integer busy_low_after_done_ok = 0;
     integer cycle_guard = 0;
     integer done_guard = 0;
@@ -180,13 +181,16 @@ module fft_radix2_core_tb;
                 if ((real_out !== expected_real_sample(out_index)) ||
                     (imag_out !== expected_imag_sample(out_index))) begin
                     output_data_ok = 0;
-                    $display("  data error output=%0d real=%0d expected=%0d",
-                             output_count,
-                             real_out,
-                             expected_real_sample(out_index));
-                    $display("  imag=%0d expected=%0d",
-                             imag_out,
-                             expected_imag_sample(out_index));
+                    output_data_error_count = output_data_error_count + 1;
+                    if (output_data_error_count <= 16) begin
+                        $display("  data error output=%0d real=%0d expected=%0d",
+                                 output_count,
+                                 real_out,
+                                 expected_real_sample(out_index));
+                        $display("  imag=%0d expected=%0d",
+                                 imag_out,
+                                 expected_imag_sample(out_index));
+                    end
                 end
 
                 output_count = output_count + 1;
