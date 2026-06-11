@@ -48,10 +48,11 @@ module fft_radix2_core #(
     localparam [3:0] STATE_BUTTERFLY_READ      = 4'd2;
     localparam [3:0] STATE_TWIDDLE_READ        = 4'd3;
     localparam [3:0] STATE_COMPLEX_MULT        = 4'd4;
-    localparam [3:0] STATE_BUTTERFLY_WRITEBACK = 4'd5;
-    localparam [3:0] STATE_BUTTERFLY_ADVANCE   = 4'd6;
-    localparam [3:0] STATE_OUTPUT              = 4'd7;
-    localparam [3:0] STATE_DONE                = 4'd8;
+    localparam [3:0] STATE_BUTTERFLY_WRITEBACK_A = 4'd5;
+    localparam [3:0] STATE_BUTTERFLY_WRITEBACK_B = 4'd6;
+    localparam [3:0] STATE_BUTTERFLY_ADVANCE     = 4'd7;
+    localparam [3:0] STATE_OUTPUT                = 4'd8;
+    localparam [3:0] STATE_DONE                  = 4'd9;
 
     reg [3:0] state = STATE_IDLE;
     reg [COUNT_WIDTH-1:0] load_count = {COUNT_WIDTH{1'b0}};
@@ -254,16 +255,24 @@ module fft_radix2_core #(
                     // outputs for the writeback cycle.
                     b_tw_real_reg <= b_tw_real_wire;
                     b_tw_imag_reg <= b_tw_imag_wire;
-                    state <= STATE_BUTTERFLY_WRITEBACK;
+                    state <= STATE_BUTTERFLY_WRITEBACK_A;
                 end
 
-                STATE_BUTTERFLY_WRITEBACK: begin
+                STATE_BUTTERFLY_WRITEBACK_A: begin
                     busy <= 1'b1;
-                    // Fourth micro-step: write A+B*W and A-B*W back to memory.
-                    // This first hardware version truncates the DATA_WIDTH+1
-                    // add/sub results back to DATA_WIDTH, so overflow wraps.
+                    // Fourth micro-step: write A+B*W back to memory. This
+                    // first hardware version truncates the DATA_WIDTH+1 result
+                    // back to DATA_WIDTH, so overflow wraps.
                     real_mem[butterfly_addr_a_reg] <= out_a_real_ext[DATA_WIDTH-1:0];
                     imag_mem[butterfly_addr_a_reg] <= out_a_imag_ext[DATA_WIDTH-1:0];
+                    state <= STATE_BUTTERFLY_WRITEBACK_B;
+                end
+
+                STATE_BUTTERFLY_WRITEBACK_B: begin
+                    busy <= 1'b1;
+                    // Fifth micro-step: write A-B*W back separately. Keeping
+                    // one memory write address per cycle makes this skeleton
+                    // friendlier to simple FPGA memory inference.
                     real_mem[butterfly_addr_b_reg] <= out_b_real_ext[DATA_WIDTH-1:0];
                     imag_mem[butterfly_addr_b_reg] <= out_b_imag_ext[DATA_WIDTH-1:0];
                     state <= STATE_BUTTERFLY_ADVANCE;

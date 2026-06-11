@@ -148,7 +148,7 @@ module fft_radix2_core_tb;
         real_in = Q_ZERO;
         imag_in = Q_ZERO;
 
-        while (output_count < FFT_SIZE && cycle_guard < 6500) begin
+        while (output_count < FFT_SIZE && cycle_guard < 7600) begin
             @(posedge clk);
             #1;
             cycle_guard = cycle_guard + 1;
