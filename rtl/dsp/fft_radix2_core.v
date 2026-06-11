@@ -73,6 +73,10 @@ module fft_radix2_core #(
     reg signed [DATA_WIDTH-1:0] tw_imag_reg = {DATA_WIDTH{1'b0}};
     reg signed [DATA_WIDTH-1:0] b_tw_real_reg = {DATA_WIDTH{1'b0}};
     reg signed [DATA_WIDTH-1:0] b_tw_imag_reg = {DATA_WIDTH{1'b0}};
+    reg signed [DATA_WIDTH-1:0] out_a_real_reg = {DATA_WIDTH{1'b0}};
+    reg signed [DATA_WIDTH-1:0] out_a_imag_reg = {DATA_WIDTH{1'b0}};
+    reg signed [DATA_WIDTH-1:0] out_b_real_reg = {DATA_WIDTH{1'b0}};
+    reg signed [DATA_WIDTH-1:0] out_b_imag_reg = {DATA_WIDTH{1'b0}};
 
     reg signed [DATA_WIDTH-1:0] real_mem [0:FFT_SIZE-1];
     reg signed [DATA_WIDTH-1:0] imag_mem [0:FFT_SIZE-1];
@@ -87,12 +91,12 @@ module fft_radix2_core #(
     wire signed [DATA_WIDTH-1:0] b_tw_imag_wire;
     wire signed [DATA_WIDTH:0] a_real_ext;
     wire signed [DATA_WIDTH:0] a_imag_ext;
-    wire signed [DATA_WIDTH:0] b_tw_real_ext;
-    wire signed [DATA_WIDTH:0] b_tw_imag_ext;
-    wire signed [DATA_WIDTH:0] out_a_real_ext;
-    wire signed [DATA_WIDTH:0] out_a_imag_ext;
-    wire signed [DATA_WIDTH:0] out_b_real_ext;
-    wire signed [DATA_WIDTH:0] out_b_imag_ext;
+    wire signed [DATA_WIDTH:0] b_tw_real_wire_ext;
+    wire signed [DATA_WIDTH:0] b_tw_imag_wire_ext;
+    wire signed [DATA_WIDTH:0] out_a_real_next;
+    wire signed [DATA_WIDTH:0] out_a_imag_next;
+    wire signed [DATA_WIDTH:0] out_b_real_next;
+    wire signed [DATA_WIDTH:0] out_b_imag_next;
 
     fft_bit_reverse #(
         .INDEX_WIDTH(INDEX_WIDTH)
@@ -137,13 +141,13 @@ module fft_radix2_core #(
 
     assign a_real_ext = {a_real_reg[DATA_WIDTH-1], a_real_reg};
     assign a_imag_ext = {a_imag_reg[DATA_WIDTH-1], a_imag_reg};
-    assign b_tw_real_ext = {b_tw_real_reg[DATA_WIDTH-1], b_tw_real_reg};
-    assign b_tw_imag_ext = {b_tw_imag_reg[DATA_WIDTH-1], b_tw_imag_reg};
+    assign b_tw_real_wire_ext = {b_tw_real_wire[DATA_WIDTH-1], b_tw_real_wire};
+    assign b_tw_imag_wire_ext = {b_tw_imag_wire[DATA_WIDTH-1], b_tw_imag_wire};
 
-    assign out_a_real_ext = a_real_ext + b_tw_real_ext;
-    assign out_a_imag_ext = a_imag_ext + b_tw_imag_ext;
-    assign out_b_real_ext = a_real_ext - b_tw_real_ext;
-    assign out_b_imag_ext = a_imag_ext - b_tw_imag_ext;
+    assign out_a_real_next = a_real_ext + b_tw_real_wire_ext;
+    assign out_a_imag_next = a_imag_ext + b_tw_imag_wire_ext;
+    assign out_b_real_next = a_real_ext - b_tw_real_wire_ext;
+    assign out_b_imag_next = a_imag_ext - b_tw_imag_wire_ext;
 
     always @(posedge clk) begin
         if (rst) begin
@@ -166,6 +170,10 @@ module fft_radix2_core #(
             tw_imag_reg <= {DATA_WIDTH{1'b0}};
             b_tw_real_reg <= {DATA_WIDTH{1'b0}};
             b_tw_imag_reg <= {DATA_WIDTH{1'b0}};
+            out_a_real_reg <= {DATA_WIDTH{1'b0}};
+            out_a_imag_reg <= {DATA_WIDTH{1'b0}};
+            out_b_real_reg <= {DATA_WIDTH{1'b0}};
+            out_b_imag_reg <= {DATA_WIDTH{1'b0}};
             out_valid <= 1'b0;
             out_index <= {INDEX_WIDTH{1'b0}};
             real_out <= {DATA_WIDTH{1'b0}};
@@ -198,6 +206,10 @@ module fft_radix2_core #(
                         tw_imag_reg <= {DATA_WIDTH{1'b0}};
                         b_tw_real_reg <= {DATA_WIDTH{1'b0}};
                         b_tw_imag_reg <= {DATA_WIDTH{1'b0}};
+                        out_a_real_reg <= {DATA_WIDTH{1'b0}};
+                        out_a_imag_reg <= {DATA_WIDTH{1'b0}};
+                        out_b_real_reg <= {DATA_WIDTH{1'b0}};
+                        out_b_imag_reg <= {DATA_WIDTH{1'b0}};
                         // Reserved for future FFT/IFFT mode selection.
                         inverse_latched <= inverse;
                         state <= STATE_LOAD;
@@ -252,19 +264,23 @@ module fft_radix2_core #(
                     busy <= 1'b1;
                     // Third micro-step: B_twiddled = B * W. complex_mult is
                     // combinational, so this state latches its scaled Q2.14
-                    // outputs for the writeback cycle.
+                    // outputs and both butterfly results for writeback. The
+                    // DATA_WIDTH+1 add/sub results are truncated back to
+                    // DATA_WIDTH here, so overflow wraps in this first version.
                     b_tw_real_reg <= b_tw_real_wire;
                     b_tw_imag_reg <= b_tw_imag_wire;
+                    out_a_real_reg <= out_a_real_next[DATA_WIDTH-1:0];
+                    out_a_imag_reg <= out_a_imag_next[DATA_WIDTH-1:0];
+                    out_b_real_reg <= out_b_real_next[DATA_WIDTH-1:0];
+                    out_b_imag_reg <= out_b_imag_next[DATA_WIDTH-1:0];
                     state <= STATE_BUTTERFLY_WRITEBACK_A;
                 end
 
                 STATE_BUTTERFLY_WRITEBACK_A: begin
                     busy <= 1'b1;
-                    // Fourth micro-step: write A+B*W back to memory. This
-                    // first hardware version truncates the DATA_WIDTH+1 result
-                    // back to DATA_WIDTH, so overflow wraps.
-                    real_mem[butterfly_addr_a_reg] <= out_a_real_ext[DATA_WIDTH-1:0];
-                    imag_mem[butterfly_addr_a_reg] <= out_a_imag_ext[DATA_WIDTH-1:0];
+                    // Fourth micro-step: write A+B*W back to memory.
+                    real_mem[butterfly_addr_a_reg] <= out_a_real_reg;
+                    imag_mem[butterfly_addr_a_reg] <= out_a_imag_reg;
                     state <= STATE_BUTTERFLY_WRITEBACK_B;
                 end
 
@@ -273,8 +289,8 @@ module fft_radix2_core #(
                     // Fifth micro-step: write A-B*W back separately. Keeping
                     // one memory write address per cycle makes this skeleton
                     // friendlier to simple FPGA memory inference.
-                    real_mem[butterfly_addr_b_reg] <= out_b_real_ext[DATA_WIDTH-1:0];
-                    imag_mem[butterfly_addr_b_reg] <= out_b_imag_ext[DATA_WIDTH-1:0];
+                    real_mem[butterfly_addr_b_reg] <= out_b_real_reg;
+                    imag_mem[butterfly_addr_b_reg] <= out_b_imag_reg;
                     state <= STATE_BUTTERFLY_ADVANCE;
                 end
 
