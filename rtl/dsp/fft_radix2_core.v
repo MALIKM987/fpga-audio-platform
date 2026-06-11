@@ -1,16 +1,18 @@
 // Standalone radix-2 FFT/IFFT core skeleton.
 //
 // This module validates frame control for the future custom FFT/IFFT:
-// start -> busy -> load frame -> butterfly read walk -> output frame -> done.
+// start -> busy -> load frame -> butterfly/twiddle read walk -> output frame
+// -> done.
 //
 // It is intentionally not a real FFT implementation yet. The LOAD state stores
 // samples at bit-reversed addresses, then OUTPUT reads memory in natural order.
 // The compute path now has the first micro-step of a future butterfly pipeline:
 // it walks through all radix-2 stage/butterfly positions, reads A/B operands
-// from memory using generated addresses, and latches them into working
-// registers. It still does not calculate twiddles, multiply, or write modified
-// butterfly results back to memory. Twiddle ROM access, complex multiplication,
-// inverse twiddle sign, and IFFT normalization will be added later.
+// from memory using generated addresses, reads the matching twiddle factor, and
+// latches them into working registers. Twiddle sign follows inverse_latched.
+// It still does not multiply, calculate butterfly results, or write modified
+// results back to memory. Complex multiplication, butterfly writeback, and IFFT
+// normalization will be added later.
 //
 // This core is standalone and is not connected to the current passthrough
 // FFT/IFFT wrappers yet.
@@ -45,9 +47,10 @@ module fft_radix2_core #(
     localparam [2:0] STATE_IDLE              = 3'd0;
     localparam [2:0] STATE_LOAD              = 3'd1;
     localparam [2:0] STATE_BUTTERFLY_READ    = 3'd2;
-    localparam [2:0] STATE_BUTTERFLY_ADVANCE = 3'd3;
-    localparam [2:0] STATE_OUTPUT            = 3'd4;
-    localparam [2:0] STATE_DONE              = 3'd5;
+    localparam [2:0] STATE_TWIDDLE_READ      = 3'd3;
+    localparam [2:0] STATE_BUTTERFLY_ADVANCE = 3'd4;
+    localparam [2:0] STATE_OUTPUT            = 3'd5;
+    localparam [2:0] STATE_DONE              = 3'd6;
 
     reg [2:0] state = STATE_IDLE;
     reg [COUNT_WIDTH-1:0] load_count = {COUNT_WIDTH{1'b0}};
@@ -64,6 +67,8 @@ module fft_radix2_core #(
     reg [INDEX_WIDTH-1:0] butterfly_twiddle_index_reg = {INDEX_WIDTH{1'b0}};
     reg [2:0] stage_counter_reg = 3'd0;
     reg [INDEX_WIDTH-2:0] butterfly_counter_reg = {(INDEX_WIDTH-1){1'b0}};
+    reg signed [DATA_WIDTH-1:0] tw_real_reg = {DATA_WIDTH{1'b0}};
+    reg signed [DATA_WIDTH-1:0] tw_imag_reg = {DATA_WIDTH{1'b0}};
 
     reg signed [DATA_WIDTH-1:0] real_mem [0:FFT_SIZE-1];
     reg signed [DATA_WIDTH-1:0] imag_mem [0:FFT_SIZE-1];
@@ -72,6 +77,8 @@ module fft_radix2_core #(
     wire [INDEX_WIDTH-1:0] butterfly_addr_a;
     wire [INDEX_WIDTH-1:0] butterfly_addr_b;
     wire [INDEX_WIDTH-1:0] butterfly_twiddle_index;
+    wire signed [DATA_WIDTH-1:0] twiddle_real_wire;
+    wire signed [DATA_WIDTH-1:0] twiddle_imag_wire;
 
     fft_bit_reverse #(
         .INDEX_WIDTH(INDEX_WIDTH)
@@ -92,6 +99,16 @@ module fft_radix2_core #(
         .twiddle_index(butterfly_twiddle_index)
     );
 
+    fft_twiddle_rom #(
+        .DATA_WIDTH(DATA_WIDTH),
+        .FRAC_BITS(14)
+    ) twiddle_rom_inst (
+        .addr(butterfly_twiddle_index_reg[6:0]),
+        .inverse(inverse_latched),
+        .tw_real(twiddle_real_wire),
+        .tw_imag(twiddle_imag_wire)
+    );
+
     always @(posedge clk) begin
         if (rst) begin
             state <= STATE_IDLE;
@@ -109,6 +126,8 @@ module fft_radix2_core #(
             butterfly_twiddle_index_reg <= {INDEX_WIDTH{1'b0}};
             stage_counter_reg <= 3'd0;
             butterfly_counter_reg <= {(INDEX_WIDTH-1){1'b0}};
+            tw_real_reg <= {DATA_WIDTH{1'b0}};
+            tw_imag_reg <= {DATA_WIDTH{1'b0}};
             out_valid <= 1'b0;
             out_index <= {INDEX_WIDTH{1'b0}};
             real_out <= {DATA_WIDTH{1'b0}};
@@ -137,6 +156,8 @@ module fft_radix2_core #(
                         butterfly_twiddle_index_reg <= {INDEX_WIDTH{1'b0}};
                         stage_counter_reg <= 3'd0;
                         butterfly_counter_reg <= {(INDEX_WIDTH-1){1'b0}};
+                        tw_real_reg <= {DATA_WIDTH{1'b0}};
+                        tw_imag_reg <= {DATA_WIDTH{1'b0}};
                         // Reserved for future FFT/IFFT mode selection.
                         inverse_latched <= inverse;
                         state <= STATE_LOAD;
@@ -164,7 +185,7 @@ module fft_radix2_core #(
                     busy <= 1'b1;
                     // First micro-step for the future butterfly pipeline:
                     // read A/B operands and latch address metadata. The next
-                    // state advances to the next slot without modifying memory.
+                    // state reads the matching twiddle factor.
                     a_real_reg <= real_mem[butterfly_addr_a];
                     a_imag_reg <= imag_mem[butterfly_addr_a];
                     b_real_reg <= real_mem[butterfly_addr_b];
@@ -174,6 +195,17 @@ module fft_radix2_core #(
                     butterfly_twiddle_index_reg <= butterfly_twiddle_index;
                     stage_counter_reg <= stage_counter;
                     butterfly_counter_reg <= butterfly_counter;
+                    state <= STATE_TWIDDLE_READ;
+                end
+
+                STATE_TWIDDLE_READ: begin
+                    busy <= 1'b1;
+                    // Second micro-step: read the twiddle factor selected by
+                    // the latched twiddle index. The inverse flag controls the
+                    // imaginary sign inside fft_twiddle_rom. No multiply or
+                    // butterfly writeback is performed in this PR.
+                    tw_real_reg <= twiddle_real_wire;
+                    tw_imag_reg <= twiddle_imag_wire;
                     state <= STATE_BUTTERFLY_ADVANCE;
                 end
 
