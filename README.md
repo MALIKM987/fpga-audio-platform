@@ -430,6 +430,20 @@ python tools/run_all_tests.py
 
 Szczegóły są opisane w `docs/fft_test_vectors.md`.
 
+## Plan własnej FFT/IFFT
+
+Projekt będzie rozwijany w kierunku własnego, sekwencyjnego rdzenia FFT/IFFT
+radix-2 dla ramek 256 próbek. Plan algorytmu, fixed-point, FSMD, twiddle ROM,
+skalowania, IFFT i testowania opisano w:
+
+```text
+docs/own_fft_ifft_design_plan.md
+```
+
+Obecne `fft_accel_wrapper.v` i `ifft_accel_wrapper.v` nadal są modelami
+passthrough. Gowin FFT IP zostaje jako opcja przyszłej optymalizacji albo
+wariant porównawczy, ale nie jest pierwszym wyborem implementacyjnym.
+
 ## Plan integracji Gowin FFT IP
 
 Plan zastąpienia obecnych wrapperów passthrough prawdziwym Gowin FFT/IFFT IP
