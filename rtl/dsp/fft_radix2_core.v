@@ -42,6 +42,9 @@ module fft_radix2_core #(
     localparam integer COUNT_WIDTH = INDEX_WIDTH + 1;
     localparam integer NUM_STAGES = 8;
     localparam integer BUTTERFLIES_PER_STAGE = FFT_SIZE / 2;
+    localparam [2:0] STAGE_PRIME_VALUE = 3'd7;
+    localparam [INDEX_WIDTH-2:0] BUTTERFLY_PRIME_VALUE =
+        {(INDEX_WIDTH-1){1'b1}};
 
     localparam [3:0] STATE_IDLE                = 4'd0;
     localparam [3:0] STATE_LOAD                = 4'd1;
@@ -57,8 +60,8 @@ module fft_radix2_core #(
     reg [3:0] state = STATE_IDLE;
     reg [COUNT_WIDTH-1:0] load_count = {COUNT_WIDTH{1'b0}};
     reg [COUNT_WIDTH-1:0] output_count = {COUNT_WIDTH{1'b0}};
-    reg [2:0] stage_counter = 3'd0;
-    reg [INDEX_WIDTH-2:0] butterfly_counter = {(INDEX_WIDTH-1){1'b0}};
+    reg [2:0] stage_counter = STAGE_PRIME_VALUE;
+    reg [INDEX_WIDTH-2:0] butterfly_counter = BUTTERFLY_PRIME_VALUE;
     reg inverse_latched = 1'b0;
     reg signed [DATA_WIDTH-1:0] a_real_reg = {DATA_WIDTH{1'b0}};
     reg signed [DATA_WIDTH-1:0] a_imag_reg = {DATA_WIDTH{1'b0}};
@@ -154,8 +157,13 @@ module fft_radix2_core #(
             state <= STATE_IDLE;
             load_count <= {COUNT_WIDTH{1'b0}};
             output_count <= {COUNT_WIDTH{1'b0}};
-            stage_counter <= 3'd0;
-            butterfly_counter <= {(INDEX_WIDTH-1){1'b0}};
+            // Keep the address generator inputs away from the first real
+            // stage-0 values while idle. On start they transition to zero,
+            // which guarantees the first butterfly address is driven even in
+            // event-driven simulators where always @* blocks may not have
+            // evaluated initial all-zero inputs.
+            stage_counter <= STAGE_PRIME_VALUE;
+            butterfly_counter <= BUTTERFLY_PRIME_VALUE;
             inverse_latched <= 1'b0;
             a_real_reg <= {DATA_WIDTH{1'b0}};
             a_imag_reg <= {DATA_WIDTH{1'b0}};

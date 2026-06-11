@@ -162,27 +162,6 @@ module fft_radix2_core_tb;
                 done_seen = 1;
             end
 
-            if (cycle_guard <= 10) begin
-                $display("  dbg cycle=%0d state=%b stage=%b butterfly=%b",
-                         cycle_guard,
-                         dut.state,
-                         dut.stage_counter,
-                         dut.butterfly_counter);
-                $display("  dbg wire_a=%b wire_b=%b reg_a=%b reg_b=%b",
-                         dut.butterfly_addr_a,
-                         dut.butterfly_addr_b,
-                         dut.butterfly_addr_a_reg,
-                         dut.butterfly_addr_b_reg);
-                $display("  dbg a=%0d b=%0d tw=%0d btw=%0d outb=%0d mem0=%0d mem1=%0d",
-                         dut.a_real_reg,
-                         dut.b_real_reg,
-                         dut.tw_real_reg,
-                         dut.b_tw_real_reg,
-                         dut.out_b_real_reg,
-                         dut.real_mem[0],
-                         dut.real_mem[1]);
-            end
-
             if (out_valid === 1'b1) begin
                 if (!first_output_seen) begin
                     first_output_seen = 1;
