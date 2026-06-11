@@ -1,6 +1,7 @@
 # FPGA Audio Platform — Tang Nano 20K
 
-Projekt jest rozwijany jako stereofoniczna platforma audio na FPGA Tang Nano 20K.
+Projekt jest rozwijany jako stereofoniczna platforma audio na FPGA
+Tang Nano 20K.
 Docelowy tor pomiarowy wykorzystuje ADC PCM1808 do akwizycji sygnalu analogowego
 L/R, przetwarzanie w FPGA oraz DAC PCM5102A do wyjscia analogowego L/R
 mierzonego oscyloskopem.
@@ -159,7 +160,8 @@ demonstracyjny, a nie docelowy tor pomiarowy.
 - Uruchomic tryb BYPASS dla weryfikacji toru PCM1808 -> FPGA -> PCM5102A.
 - Dodac sterowanie parametrami audio z przyciskow.
 - Rozwijac bloki DAFX/korektora dla kanalow L/R.
-- Docelowo przygotowac sprzetowa akceleracje FFT/IFFT do przetwarzania widmowego.
+- Docelowo przygotowac sprzetowa akceleracje FFT/IFFT do przetwarzania
+  widmowego.
 
 ## Aktualny status projektu
 
@@ -177,7 +179,8 @@ Zaimplementowane:
 - `fft_accel_wrapper` i `ifft_accel_wrapper` jako modele passthrough interfejsów
   przyszłych akceleratorów.
 - `fft_ifft_pipeline` jako model integracyjny:
-  `sample_block_buffer -> fft_accel_wrapper -> spectral_processor -> ifft_accel_wrapper`.
+  `sample_block_buffer -> fft_accel_wrapper -> spectral_processor ->`
+  `ifft_accel_wrapper`.
 - `fft_control_regs` jako rejestrowy interfejs sterujący z CONTROL, STATUS,
   gainami i wyborem testu.
 - `fft_accelerator_core` jako nadrzędny model akceleratora:
@@ -298,7 +301,8 @@ albo dokumentacja plytki nie potwierdza polaczenia UART, nalezy potraktowac
 zewnetrzny konwerter USB-UART 3.3 V oraz potwierdzone przypisanie pinu TX w
 constraints. Nie nalezy podlaczac 5 V do pinow FPGA.
 
-Symulacje self-testu sa opisane w `docs/simulation_notes.md`. Przyklad dla Icarus Verilog:
+Symulacje self-testu sa opisane w `docs/simulation_notes.md`. Przyklad dla
+Icarus Verilog:
 
 ```powershell
 iverilog -g2001 `
@@ -370,11 +374,11 @@ opisane w `docs/source_structure_notes.md`.
 ## Demonstracja akceleratora sterowanego rejestrami
 
 `fft_accelerator_core` pokazuje obecny model akceleratora sterowany przez prosty
-bank rejestrów `fft_control_regs`. Jest to odpowiednik idei znanej z laboratoriów
-CORDIC/AXI: zapis rejestru sterującego, oczekiwanie na zakończenie i odczyt
-rejestru statusu. Na tym etapie nie jest to jeszcze konkretna magistrala
-AXI-Lite, tylko stabilna semantyka `CONTROL_REG` / `STATUS_REG` gotowa do
-późniejszego podłączenia do UART, soft CPU albo mostka AXI-like.
+bank rejestrów `fft_control_regs`. Jest to odpowiednik idei znanej z
+laboratoriów CORDIC/AXI: zapis rejestru sterującego, oczekiwanie na zakończenie
+i odczyt rejestru statusu. Na tym etapie nie jest to jeszcze konkretna
+magistrala AXI-Lite, tylko stabilna semantyka `CONTROL_REG` / `STATUS_REG`
+gotowa do późniejszego podłączenia do UART, soft CPU albo mostka AXI-like.
 
 Demonstrację uruchamia się razem z pozostałymi testami:
 
@@ -446,7 +450,8 @@ gowin_impl/tang_audio_hw/
 Aktualny projekt narzedziowy moze uzywac kopii plikow z
 `gowin_impl/tang_audio_hw/src/`. Canonical source pozostaje w `rtl/`.
 
-Testbenche sa w katalogu `tb/`. Komendy przykladowe opisano w `docs/simulation_notes.md`.
+Testbenche sa w katalogu `tb/`. Komendy przykladowe opisano w
+`docs/simulation_notes.md`.
 
 Uruchamianie podstawowych testów Python/Verilog:
 
@@ -464,7 +469,8 @@ pull requestów do `fpga-only-fft-console`.
 
 - Sprawdzic poziomy logiczne I2S przed podlaczeniem do Tang Nano 20K.
 - Nie podawac 5 V na piny FPGA.
-- Zapewnic wspolna mase GND miedzy FPGA, PCM1808, PCM5102A, generatorem i oscyloskopem.
+- Zapewnic wspolna mase GND miedzy FPGA, PCM1808, PCM5102A, generatorem
+  i oscyloskopem.
 - Zaczac od malej amplitudy generatora.
 - Nie zgadywac pinow FPGA.
 - Sprawdzic sposob taktowania PCM1808 i PCM5102A.
