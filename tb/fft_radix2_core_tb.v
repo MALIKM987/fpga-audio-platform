@@ -115,7 +115,7 @@ module fft_radix2_core_tb;
     initial begin
         $display("=== FFT RADIX-2 CORE SKELETON TEST ===");
         $display("FFT_SIZE=%0d", FFT_SIZE);
-        $display("MODE=STAGE_WALK_REORDER_SKELETON_NO_BUTTERFLY");
+        $display("MODE=BUTTERFLY_READ_REORDER_SKELETON_NO_BUTTERFLY");
         $display("");
 
         repeat (3) @(posedge clk);
@@ -155,7 +155,7 @@ module fft_radix2_core_tb;
         real_in = {DATA_WIDTH{1'b0}};
         imag_in = {DATA_WIDTH{1'b0}};
 
-        while (output_count < FFT_SIZE && cycle_guard < 1600) begin
+        while (output_count < FFT_SIZE && cycle_guard < 2800) begin
             @(posedge clk);
             #1;
             cycle_guard = cycle_guard + 1;
@@ -171,7 +171,7 @@ module fft_radix2_core_tb;
             if (out_valid === 1'b1) begin
                 if (!first_output_seen) begin
                     first_output_seen = 1;
-                    compute_walk_delay_ok = (compute_wait_cycles >= 1024);
+                    compute_walk_delay_ok = (compute_wait_cycles >= 2048);
                     if (!compute_walk_delay_ok) begin
                         $display("  first output too early after %0d compute cycles",
                                  compute_wait_cycles);
