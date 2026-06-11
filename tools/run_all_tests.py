@@ -28,6 +28,13 @@ VECTOR_TESTS = [
 
 VERILOG_TESTS = [
     {
+        "name": "complex_mult",
+        "sources": [
+            "rtl/dsp/complex_mult.v",
+            "tb/complex_mult_tb.v",
+        ],
+    },
+    {
         "name": "fft_twiddle_rom",
         "sources": [
             "rtl/dsp/fft_twiddle_rom.v",
