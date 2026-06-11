@@ -439,6 +439,19 @@ jest opisany w:
 docs/gowin_fft_ip_integration_plan.md
 ```
 
+## Przygotowanie importu Gowin FFT IP
+
+Checklistę generowania bloków FFT/IFFT w Gowin EDA zapisano w:
+
+```text
+docs/gowin_fft_ip_generation_checklist.md
+```
+
+Katalog `vendor/gowin_ip/` jest przygotowany jako miejsce na przyszłe,
+wygenerowane lokalnie pliki IP. Pliki IP nie są jeszcze dodane, a dokładne
+porty, parametry, skalowanie i możliwość symulacji trzeba potwierdzić po
+wygenerowaniu IP w Gowin EDA.
+
 ## Budowanie i symulacje
 
 Projekt Gowin znajduje sie w:
