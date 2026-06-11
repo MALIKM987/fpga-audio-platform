@@ -6,6 +6,9 @@ module fft_radix2_core_tb;
     localparam integer DATA_WIDTH  = 16;
     localparam integer INDEX_WIDTH = 8;
 
+    localparam signed [DATA_WIDTH-1:0] Q_ZERO = 16'sd0;
+    localparam signed [DATA_WIDTH-1:0] Q_ONE  = 16'sd16384;
+
     reg clk = 1'b0;
     reg rst = 1'b1;
     reg start = 1'b0;
@@ -32,6 +35,7 @@ module fft_radix2_core_tb;
     integer compute_walk_delay_ok = 0;
     integer output_order_ok = 1;
     integer output_data_ok = 1;
+    integer output_data_error_count = 0;
     integer busy_low_after_done_ok = 0;
     integer cycle_guard = 0;
     integer done_guard = 0;
@@ -60,28 +64,17 @@ module fft_radix2_core_tb;
 
     always #5 clk = ~clk;
 
-    function [INDEX_WIDTH-1:0] bit_reverse8;
-        input [INDEX_WIDTH-1:0] value;
-        integer bit_idx;
-        begin
-            for (bit_idx = 0; bit_idx < INDEX_WIDTH; bit_idx = bit_idx + 1) begin
-                bit_reverse8[INDEX_WIDTH-1-bit_idx] = value[bit_idx];
-            end
-        end
-    endfunction
-
     function signed [DATA_WIDTH-1:0] expected_real_sample;
         input [INDEX_WIDTH-1:0] value;
         begin
-            expected_real_sample =
-                {{(DATA_WIDTH-INDEX_WIDTH){1'b0}}, bit_reverse8(value)};
+            expected_real_sample = Q_ONE;
         end
     endfunction
 
     function signed [DATA_WIDTH-1:0] expected_imag_sample;
         input [INDEX_WIDTH-1:0] value;
         begin
-            expected_imag_sample = -expected_real_sample(value);
+            expected_imag_sample = Q_ZERO;
         end
     endfunction
 
@@ -113,9 +106,10 @@ module fft_radix2_core_tb;
     endtask
 
     initial begin
-        $display("=== FFT RADIX-2 CORE SKELETON TEST ===");
+        $display("=== FFT RADIX-2 CORE COMPUTE TEST ===");
         $display("FFT_SIZE=%0d", FFT_SIZE);
-        $display("MODE=TWIDDLE_READ_REORDER_SKELETON_NO_BUTTERFLY");
+        $display("MODE=RADIX2_BUTTERFLY_WRITEBACK_IMPULSE");
+        $display("INPUT=impulse real[0]=16384 imag[0]=0");
         $display("");
 
         repeat (3) @(posedge clk);
@@ -144,18 +138,18 @@ module fft_radix2_core_tb;
             @(negedge clk);
             in_valid = 1'b1;
             in_index = i[INDEX_WIDTH-1:0];
-            real_in = i[DATA_WIDTH-1:0];
-            imag_in = -i[DATA_WIDTH-1:0];
+            real_in = (i == 0) ? Q_ONE : Q_ZERO;
+            imag_in = Q_ZERO;
             check_no_early_out_valid();
         end
 
         @(negedge clk);
         in_valid = 1'b0;
         in_index = {INDEX_WIDTH{1'b0}};
-        real_in = {DATA_WIDTH{1'b0}};
-        imag_in = {DATA_WIDTH{1'b0}};
+        real_in = Q_ZERO;
+        imag_in = Q_ZERO;
 
-        while (output_count < FFT_SIZE && cycle_guard < 3800) begin
+        while (output_count < FFT_SIZE && cycle_guard < 7600) begin
             @(posedge clk);
             #1;
             cycle_guard = cycle_guard + 1;
@@ -171,7 +165,7 @@ module fft_radix2_core_tb;
             if (out_valid === 1'b1) begin
                 if (!first_output_seen) begin
                     first_output_seen = 1;
-                    compute_walk_delay_ok = (compute_wait_cycles >= 3072);
+                    compute_walk_delay_ok = (compute_wait_cycles >= 5120);
                     if (!compute_walk_delay_ok) begin
                         $display("  first output too early after %0d compute cycles",
                                  compute_wait_cycles);
@@ -184,16 +178,19 @@ module fft_radix2_core_tb;
                              out_index, output_count);
                 end
 
-                if ((real_out !== expected_real_sample(output_count[INDEX_WIDTH-1:0])) ||
-                    (imag_out !== expected_imag_sample(output_count[INDEX_WIDTH-1:0]))) begin
+                if ((real_out !== expected_real_sample(out_index)) ||
+                    (imag_out !== expected_imag_sample(out_index))) begin
                     output_data_ok = 0;
-                    $display("  data error output=%0d real=%0d expected=%0d",
-                             output_count,
-                             real_out,
-                             expected_real_sample(output_count[INDEX_WIDTH-1:0]));
-                    $display("  imag=%0d expected=%0d",
-                             imag_out,
-                             expected_imag_sample(output_count[INDEX_WIDTH-1:0]));
+                    output_data_error_count = output_data_error_count + 1;
+                    if (output_data_error_count <= 16) begin
+                        $display("  data error output=%0d real=%0d expected=%0d",
+                                 output_count,
+                                 real_out,
+                                 expected_real_sample(out_index));
+                        $display("  imag=%0d expected=%0d",
+                                 imag_out,
+                                 expected_imag_sample(out_index));
+                    end
                 end
 
                 output_count = output_count + 1;
@@ -225,7 +222,7 @@ module fft_radix2_core_tb;
         report_result("compute_walk_delay", compute_walk_delay_ok);
         report_result("output_count", output_count == FFT_SIZE);
         report_result("output_order", output_order_ok);
-        report_result("output_data", output_data_ok);
+        report_result("impulse_output_data", output_data_ok);
         report_result("done_pulse", done_seen);
         report_result("busy_low_after_done", busy_low_after_done_ok);
 

@@ -1,18 +1,17 @@
 // Standalone radix-2 FFT/IFFT core skeleton.
 //
 // This module validates frame control for the future custom FFT/IFFT:
-// start -> busy -> load frame -> butterfly/twiddle read walk -> output frame
+// start -> busy -> load frame -> butterfly compute/writeback -> output frame
 // -> done.
 //
-// It is intentionally not a real FFT implementation yet. The LOAD state stores
-// samples at bit-reversed addresses, then OUTPUT reads memory in natural order.
-// The compute path now has the first micro-step of a future butterfly pipeline:
-// it walks through all radix-2 stage/butterfly positions, reads A/B operands
-// from memory using generated addresses, reads the matching twiddle factor, and
-// latches them into working registers. Twiddle sign follows inverse_latched.
-// It still does not multiply, calculate butterfly results, or write modified
-// results back to memory. Complex multiplication, butterfly writeback, and IFFT
-// normalization will be added later.
+// The LOAD state stores samples at bit-reversed addresses, then OUTPUT reads
+// memory in natural order.
+// The compute path now performs the first real radix-2 butterfly step inside
+// this standalone core: it reads A/B operands, reads the matching twiddle
+// factor, multiplies B by W, computes A+B*W and A-B*W, and writes both results
+// back to internal memory. Twiddle sign follows inverse_latched. This first
+// version uses simple wraparound/truncation after add/sub; scaling and
+// saturation can be improved later.
 //
 // This core is standalone and is not connected to the current passthrough
 // FFT/IFFT wrappers yet.
@@ -44,15 +43,18 @@ module fft_radix2_core #(
     localparam integer NUM_STAGES = 8;
     localparam integer BUTTERFLIES_PER_STAGE = FFT_SIZE / 2;
 
-    localparam [2:0] STATE_IDLE              = 3'd0;
-    localparam [2:0] STATE_LOAD              = 3'd1;
-    localparam [2:0] STATE_BUTTERFLY_READ    = 3'd2;
-    localparam [2:0] STATE_TWIDDLE_READ      = 3'd3;
-    localparam [2:0] STATE_BUTTERFLY_ADVANCE = 3'd4;
-    localparam [2:0] STATE_OUTPUT            = 3'd5;
-    localparam [2:0] STATE_DONE              = 3'd6;
+    localparam [3:0] STATE_IDLE                = 4'd0;
+    localparam [3:0] STATE_LOAD                = 4'd1;
+    localparam [3:0] STATE_BUTTERFLY_READ      = 4'd2;
+    localparam [3:0] STATE_TWIDDLE_READ        = 4'd3;
+    localparam [3:0] STATE_COMPLEX_MULT        = 4'd4;
+    localparam [3:0] STATE_BUTTERFLY_WRITEBACK_A = 4'd5;
+    localparam [3:0] STATE_BUTTERFLY_WRITEBACK_B = 4'd6;
+    localparam [3:0] STATE_BUTTERFLY_ADVANCE     = 4'd7;
+    localparam [3:0] STATE_OUTPUT                = 4'd8;
+    localparam [3:0] STATE_DONE                  = 4'd9;
 
-    reg [2:0] state = STATE_IDLE;
+    reg [3:0] state = STATE_IDLE;
     reg [COUNT_WIDTH-1:0] load_count = {COUNT_WIDTH{1'b0}};
     reg [COUNT_WIDTH-1:0] output_count = {COUNT_WIDTH{1'b0}};
     reg [2:0] stage_counter = 3'd0;
@@ -69,6 +71,12 @@ module fft_radix2_core #(
     reg [INDEX_WIDTH-2:0] butterfly_counter_reg = {(INDEX_WIDTH-1){1'b0}};
     reg signed [DATA_WIDTH-1:0] tw_real_reg = {DATA_WIDTH{1'b0}};
     reg signed [DATA_WIDTH-1:0] tw_imag_reg = {DATA_WIDTH{1'b0}};
+    reg signed [DATA_WIDTH-1:0] b_tw_real_reg = {DATA_WIDTH{1'b0}};
+    reg signed [DATA_WIDTH-1:0] b_tw_imag_reg = {DATA_WIDTH{1'b0}};
+    reg signed [DATA_WIDTH-1:0] out_a_real_reg = {DATA_WIDTH{1'b0}};
+    reg signed [DATA_WIDTH-1:0] out_a_imag_reg = {DATA_WIDTH{1'b0}};
+    reg signed [DATA_WIDTH-1:0] out_b_real_reg = {DATA_WIDTH{1'b0}};
+    reg signed [DATA_WIDTH-1:0] out_b_imag_reg = {DATA_WIDTH{1'b0}};
 
     reg signed [DATA_WIDTH-1:0] real_mem [0:FFT_SIZE-1];
     reg signed [DATA_WIDTH-1:0] imag_mem [0:FFT_SIZE-1];
@@ -79,6 +87,16 @@ module fft_radix2_core #(
     wire [INDEX_WIDTH-1:0] butterfly_twiddle_index;
     wire signed [DATA_WIDTH-1:0] twiddle_real_wire;
     wire signed [DATA_WIDTH-1:0] twiddle_imag_wire;
+    wire signed [DATA_WIDTH-1:0] b_tw_real_wire;
+    wire signed [DATA_WIDTH-1:0] b_tw_imag_wire;
+    wire signed [DATA_WIDTH:0] a_real_ext;
+    wire signed [DATA_WIDTH:0] a_imag_ext;
+    wire signed [DATA_WIDTH:0] b_tw_real_wire_ext;
+    wire signed [DATA_WIDTH:0] b_tw_imag_wire_ext;
+    wire signed [DATA_WIDTH:0] out_a_real_next;
+    wire signed [DATA_WIDTH:0] out_a_imag_next;
+    wire signed [DATA_WIDTH:0] out_b_real_next;
+    wire signed [DATA_WIDTH:0] out_b_imag_next;
 
     fft_bit_reverse #(
         .INDEX_WIDTH(INDEX_WIDTH)
@@ -109,6 +127,28 @@ module fft_radix2_core #(
         .tw_imag(twiddle_imag_wire)
     );
 
+    complex_mult #(
+        .DATA_WIDTH(DATA_WIDTH),
+        .FRAC_BITS(14)
+    ) b_twiddle_mult_inst (
+        .a_real(b_real_reg),
+        .a_imag(b_imag_reg),
+        .b_real(tw_real_reg),
+        .b_imag(tw_imag_reg),
+        .out_real(b_tw_real_wire),
+        .out_imag(b_tw_imag_wire)
+    );
+
+    assign a_real_ext = {a_real_reg[DATA_WIDTH-1], a_real_reg};
+    assign a_imag_ext = {a_imag_reg[DATA_WIDTH-1], a_imag_reg};
+    assign b_tw_real_wire_ext = {b_tw_real_wire[DATA_WIDTH-1], b_tw_real_wire};
+    assign b_tw_imag_wire_ext = {b_tw_imag_wire[DATA_WIDTH-1], b_tw_imag_wire};
+
+    assign out_a_real_next = a_real_ext + b_tw_real_wire_ext;
+    assign out_a_imag_next = a_imag_ext + b_tw_imag_wire_ext;
+    assign out_b_real_next = a_real_ext - b_tw_real_wire_ext;
+    assign out_b_imag_next = a_imag_ext - b_tw_imag_wire_ext;
+
     always @(posedge clk) begin
         if (rst) begin
             state <= STATE_IDLE;
@@ -128,6 +168,12 @@ module fft_radix2_core #(
             butterfly_counter_reg <= {(INDEX_WIDTH-1){1'b0}};
             tw_real_reg <= {DATA_WIDTH{1'b0}};
             tw_imag_reg <= {DATA_WIDTH{1'b0}};
+            b_tw_real_reg <= {DATA_WIDTH{1'b0}};
+            b_tw_imag_reg <= {DATA_WIDTH{1'b0}};
+            out_a_real_reg <= {DATA_WIDTH{1'b0}};
+            out_a_imag_reg <= {DATA_WIDTH{1'b0}};
+            out_b_real_reg <= {DATA_WIDTH{1'b0}};
+            out_b_imag_reg <= {DATA_WIDTH{1'b0}};
             out_valid <= 1'b0;
             out_index <= {INDEX_WIDTH{1'b0}};
             real_out <= {DATA_WIDTH{1'b0}};
@@ -158,6 +204,12 @@ module fft_radix2_core #(
                         butterfly_counter_reg <= {(INDEX_WIDTH-1){1'b0}};
                         tw_real_reg <= {DATA_WIDTH{1'b0}};
                         tw_imag_reg <= {DATA_WIDTH{1'b0}};
+                        b_tw_real_reg <= {DATA_WIDTH{1'b0}};
+                        b_tw_imag_reg <= {DATA_WIDTH{1'b0}};
+                        out_a_real_reg <= {DATA_WIDTH{1'b0}};
+                        out_a_imag_reg <= {DATA_WIDTH{1'b0}};
+                        out_b_real_reg <= {DATA_WIDTH{1'b0}};
+                        out_b_imag_reg <= {DATA_WIDTH{1'b0}};
                         // Reserved for future FFT/IFFT mode selection.
                         inverse_latched <= inverse;
                         state <= STATE_LOAD;
@@ -202,17 +254,49 @@ module fft_radix2_core #(
                     busy <= 1'b1;
                     // Second micro-step: read the twiddle factor selected by
                     // the latched twiddle index. The inverse flag controls the
-                    // imaginary sign inside fft_twiddle_rom. No multiply or
-                    // butterfly writeback is performed in this PR.
+                    // imaginary sign inside fft_twiddle_rom.
                     tw_real_reg <= twiddle_real_wire;
                     tw_imag_reg <= twiddle_imag_wire;
+                    state <= STATE_COMPLEX_MULT;
+                end
+
+                STATE_COMPLEX_MULT: begin
+                    busy <= 1'b1;
+                    // Third micro-step: B_twiddled = B * W. complex_mult is
+                    // combinational, so this state latches its scaled Q2.14
+                    // outputs and both butterfly results for writeback. The
+                    // DATA_WIDTH+1 add/sub results are truncated back to
+                    // DATA_WIDTH here, so overflow wraps in this first version.
+                    b_tw_real_reg <= b_tw_real_wire;
+                    b_tw_imag_reg <= b_tw_imag_wire;
+                    out_a_real_reg <= out_a_real_next[DATA_WIDTH-1:0];
+                    out_a_imag_reg <= out_a_imag_next[DATA_WIDTH-1:0];
+                    out_b_real_reg <= out_b_real_next[DATA_WIDTH-1:0];
+                    out_b_imag_reg <= out_b_imag_next[DATA_WIDTH-1:0];
+                    state <= STATE_BUTTERFLY_WRITEBACK_A;
+                end
+
+                STATE_BUTTERFLY_WRITEBACK_A: begin
+                    busy <= 1'b1;
+                    // Fourth micro-step: write A+B*W back to memory.
+                    real_mem[butterfly_addr_a_reg] <= out_a_real_reg;
+                    imag_mem[butterfly_addr_a_reg] <= out_a_imag_reg;
+                    state <= STATE_BUTTERFLY_WRITEBACK_B;
+                end
+
+                STATE_BUTTERFLY_WRITEBACK_B: begin
+                    busy <= 1'b1;
+                    // Fifth micro-step: write A-B*W back separately. Keeping
+                    // one memory write address per cycle makes this skeleton
+                    // friendlier to simple FPGA memory inference.
+                    real_mem[butterfly_addr_b_reg] <= out_b_real_reg;
+                    imag_mem[butterfly_addr_b_reg] <= out_b_imag_reg;
                     state <= STATE_BUTTERFLY_ADVANCE;
                 end
 
                 STATE_BUTTERFLY_ADVANCE: begin
                     busy <= 1'b1;
-                    // No butterfly math or writeback yet. This state only
-                    // advances through every radix-2 stage/butterfly slot.
+                    // Advance through every radix-2 stage/butterfly slot.
                     if ((stage_counter == NUM_STAGES - 1) &&
                         (butterfly_counter == BUTTERFLIES_PER_STAGE - 1)) begin
                         stage_counter <= 3'd0;

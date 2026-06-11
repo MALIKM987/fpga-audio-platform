@@ -12,8 +12,8 @@
 //   W_N^-k = cos(2*pi*k/N) + j*sin(2*pi*k/N)
 //
 // The ROM stores quarter-wave cosine values and derives the first half of the
-// unit circle by symmetry. This block is standalone and is not connected to the
-// current passthrough FFT/IFFT wrappers yet.
+// unit circle by symmetry. The standalone fft_radix2_core.v uses this block
+// internally, but the current FFT/IFFT wrappers remain passthrough models.
 
 module fft_twiddle_rom #(
     parameter DATA_WIDTH = 16,
@@ -21,13 +21,9 @@ module fft_twiddle_rom #(
 )(
     input  wire [6:0] addr,
     input  wire       inverse,
-    output reg signed [DATA_WIDTH-1:0] tw_real,
-    output reg signed [DATA_WIDTH-1:0] tw_imag
+    output wire signed [DATA_WIDTH-1:0] tw_real,
+    output wire signed [DATA_WIDTH-1:0] tw_imag
 );
-
-    reg [6:0] mirror_addr;
-    reg signed [DATA_WIDTH-1:0] base_real;
-    reg signed [DATA_WIDTH-1:0] base_imag;
 
     // Q2.14 cosine table for angles 2*pi*k/256, k = 0..64.
     // FRAC_BITS is kept as a parameter for interface documentation; this first
@@ -106,23 +102,36 @@ module fft_twiddle_rom #(
         end
     endfunction
 
-    always @* begin
-        if (addr <= 7'd64) begin
-            mirror_addr = addr;
-            base_real = cos_q14(addr);
-            base_imag = -cos_q14(7'd64 - addr);
-        end else begin
-            mirror_addr = 8'd128 - {1'b0, addr};
-            base_real = -cos_q14(mirror_addr);
-            base_imag = -cos_q14(7'd64 - mirror_addr);
+    function signed [DATA_WIDTH-1:0] fft_real_q14;
+        input [6:0] index;
+        reg [6:0] mirror_addr;
+        begin
+            if (index <= 7'd64) begin
+                fft_real_q14 = cos_q14(index);
+            end else begin
+                mirror_addr = 8'd128 - {1'b0, index};
+                fft_real_q14 = -cos_q14(mirror_addr);
+            end
         end
+    endfunction
 
-        tw_real = base_real;
-        if (inverse) begin
-            tw_imag = -base_imag;
-        end else begin
-            tw_imag = base_imag;
+    function signed [DATA_WIDTH-1:0] fft_imag_q14;
+        input [6:0] index;
+        reg [6:0] mirror_addr;
+        begin
+            if (index <= 7'd64) begin
+                fft_imag_q14 = -cos_q14(7'd64 - index);
+            end else begin
+                mirror_addr = 8'd128 - {1'b0, index};
+                fft_imag_q14 = -cos_q14(7'd64 - mirror_addr);
+            end
         end
-    end
+    endfunction
+
+    wire signed [DATA_WIDTH-1:0] fft_imag;
+
+    assign tw_real = fft_real_q14(addr);
+    assign fft_imag = fft_imag_q14(addr);
+    assign tw_imag = inverse ? -fft_imag : fft_imag;
 
 endmodule
