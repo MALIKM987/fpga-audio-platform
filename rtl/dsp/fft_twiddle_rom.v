@@ -132,6 +132,6 @@ module fft_twiddle_rom #(
 
     assign tw_real = fft_real_q14(addr);
     assign fft_imag = fft_imag_q14(addr);
-assign tw_imag = inverse ? -fft_imag : fft_imag;
+    assign tw_imag = inverse ? -fft_imag : fft_imag;
 
 endmodule
