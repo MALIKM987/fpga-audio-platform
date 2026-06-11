@@ -27,10 +27,14 @@ module fft_radix2_core_tb;
     integer busy_seen = 0;
     integer done_seen = 0;
     integer early_out_valid_seen = 0;
+    integer first_output_seen = 0;
+    integer compute_wait_cycles = 0;
+    integer compute_walk_delay_ok = 0;
     integer output_order_ok = 1;
     integer output_data_ok = 1;
     integer busy_low_after_done_ok = 0;
     integer cycle_guard = 0;
+    integer done_guard = 0;
     integer i;
 
     fft_radix2_core #(
@@ -111,7 +115,7 @@ module fft_radix2_core_tb;
     initial begin
         $display("=== FFT RADIX-2 CORE SKELETON TEST ===");
         $display("FFT_SIZE=%0d", FFT_SIZE);
-        $display("MODE=FRAME_REORDER_SKELETON_NO_BUTTERFLY");
+        $display("MODE=STAGE_WALK_REORDER_SKELETON_NO_BUTTERFLY");
         $display("");
 
         repeat (3) @(posedge clk);
@@ -151,7 +155,7 @@ module fft_radix2_core_tb;
         real_in = {DATA_WIDTH{1'b0}};
         imag_in = {DATA_WIDTH{1'b0}};
 
-        while (output_count < FFT_SIZE && cycle_guard < 1024) begin
+        while (output_count < FFT_SIZE && cycle_guard < 1600) begin
             @(posedge clk);
             #1;
             cycle_guard = cycle_guard + 1;
@@ -165,6 +169,15 @@ module fft_radix2_core_tb;
             end
 
             if (out_valid === 1'b1) begin
+                if (!first_output_seen) begin
+                    first_output_seen = 1;
+                    compute_walk_delay_ok = (compute_wait_cycles >= 1024);
+                    if (!compute_walk_delay_ok) begin
+                        $display("  first output too early after %0d compute cycles",
+                                 compute_wait_cycles);
+                    end
+                end
+
                 if (out_index !== output_count[INDEX_WIDTH-1:0]) begin
                     output_order_ok = 0;
                     $display("  order error index=%0d expected=%0d",
@@ -184,13 +197,15 @@ module fft_radix2_core_tb;
                 end
 
                 output_count = output_count + 1;
+            end else if (!first_output_seen) begin
+                compute_wait_cycles = compute_wait_cycles + 1;
             end
         end
 
-        while (done_seen == 0 && cycle_guard < 1100) begin
+        while (done_seen == 0 && done_guard < 8) begin
             @(posedge clk);
             #1;
-            cycle_guard = cycle_guard + 1;
+            done_guard = done_guard + 1;
             if (done === 1'b1) begin
                 done_seen = 1;
                 busy_low_after_done_ok = (busy === 1'b0);
@@ -207,6 +222,7 @@ module fft_radix2_core_tb;
 
         report_result("busy_seen", busy_seen);
         report_result("no_early_out_valid", !early_out_valid_seen);
+        report_result("compute_walk_delay", compute_walk_delay_ok);
         report_result("output_count", output_count == FFT_SIZE);
         report_result("output_order", output_order_ok);
         report_result("output_data", output_data_ok);
