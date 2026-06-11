@@ -40,6 +40,7 @@ VERILOG_TESTS = [
             "rtl/dsp/fft_bit_reverse.v",
             "rtl/dsp/fft_butterfly_addr_gen.v",
             "rtl/dsp/fft_twiddle_rom.v",
+            "rtl/dsp/complex_mult.v",
             "rtl/dsp/fft_radix2_core.v",
             "tb/fft_radix2_core_tb.v",
         ],
