@@ -5,8 +5,8 @@ module fft_twiddle_rom_tb;
     localparam integer DATA_WIDTH = 16;
     localparam integer FRAC_BITS  = 14;
 
-    reg [6:0] addr = 7'd0;
-    reg inverse = 1'b0;
+    reg [6:0] addr = 7'd127;
+    reg inverse = 1'b1;
 
     wire signed [DATA_WIDTH-1:0] tw_real;
     wire signed [DATA_WIDTH-1:0] tw_imag;
