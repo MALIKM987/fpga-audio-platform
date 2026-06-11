@@ -426,6 +426,15 @@ python tools/run_all_tests.py
 
 Szczegóły są opisane w `docs/fft_test_vectors.md`.
 
+## Plan integracji Gowin FFT IP
+
+Plan zastąpienia obecnych wrapperów passthrough prawdziwym Gowin FFT/IFFT IP
+jest opisany w:
+
+```text
+docs/gowin_fft_ip_integration_plan.md
+```
+
 ## Budowanie i symulacje
 
 Projekt Gowin znajduje sie w:
