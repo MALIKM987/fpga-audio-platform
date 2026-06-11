@@ -28,6 +28,13 @@ VECTOR_TESTS = [
 
 VERILOG_TESTS = [
     {
+        "name": "fft_bit_reverse",
+        "sources": [
+            "rtl/dsp/fft_bit_reverse.v",
+            "tb/fft_bit_reverse_tb.v",
+        ],
+    },
+    {
         "name": "complex_mult",
         "sources": [
             "rtl/dsp/complex_mult.v",
