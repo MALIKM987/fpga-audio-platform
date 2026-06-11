@@ -34,6 +34,7 @@ module fft_radix2_core_tb;
     integer output_data_ok = 1;
     integer busy_low_after_done_ok = 0;
     integer cycle_guard = 0;
+    integer done_guard = 0;
     integer i;
 
     fft_radix2_core #(
@@ -201,10 +202,10 @@ module fft_radix2_core_tb;
             end
         end
 
-        while (done_seen == 0 && cycle_guard < 1100) begin
+        while (done_seen == 0 && done_guard < 8) begin
             @(posedge clk);
             #1;
-            cycle_guard = cycle_guard + 1;
+            done_guard = done_guard + 1;
             if (done === 1'b1) begin
                 done_seen = 1;
                 busy_low_after_done_ok = (busy === 1'b0);
