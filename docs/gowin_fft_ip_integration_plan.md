@@ -79,8 +79,9 @@ Istniejące moduły projektu używają własnego, prostego interfejsu:
 - `busy`,
 - `done`.
 
-Gowin FFT IP może mieć inny interfejs niż obecne wrappery. Dokładne nazwy portów,
-handshake i parametry trzeba potwierdzić dopiero po wygenerowaniu IP w Gowin EDA.
+Gowin FFT IP może mieć inny interfejs niż obecne wrappery. Dokładne nazwy
+portów, handshake i parametry trzeba potwierdzić dopiero po wygenerowaniu IP w
+Gowin EDA.
 
 Adapter będzie potrzebny do dopasowania:
 
