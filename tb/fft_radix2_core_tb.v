@@ -39,6 +39,7 @@ module fft_radix2_core_tb;
     integer busy_low_after_done_ok = 0;
     integer cycle_guard = 0;
     integer done_guard = 0;
+    integer first_butterfly_debug_seen = 0;
     integer i;
 
     fft_radix2_core #(
@@ -160,6 +161,20 @@ module fft_radix2_core_tb;
 
             if (done === 1'b1) begin
                 done_seen = 1;
+            end
+
+            if (!first_butterfly_debug_seen && (dut.state === 4'd7)) begin
+                first_butterfly_debug_seen = 1;
+                $display("  debug first butterfly addr_a=%0d addr_b=%0d",
+                         dut.butterfly_addr_a_reg,
+                         dut.butterfly_addr_b_reg);
+                $display("  debug first butterfly a_real=%0d b_real=%0d b_tw_real=%0d",
+                         dut.a_real_reg,
+                         dut.b_real_reg,
+                         dut.b_tw_real_reg);
+                $display("  debug first butterfly mem0=%0d mem1=%0d",
+                         dut.real_mem[0],
+                         dut.real_mem[1]);
             end
 
             if (out_valid === 1'b1) begin
