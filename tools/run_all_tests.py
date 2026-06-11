@@ -28,6 +28,13 @@ VECTOR_TESTS = [
 
 VERILOG_TESTS = [
     {
+        "name": "fft_twiddle_rom",
+        "sources": [
+            "rtl/dsp/fft_twiddle_rom.v",
+            "tb/fft_twiddle_rom_tb.v",
+        ],
+    },
+    {
         "name": "fft_control_regs",
         "sources": [
             "rtl/control/fft_control_regs.v",
