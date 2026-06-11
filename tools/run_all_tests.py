@@ -28,6 +28,13 @@ VECTOR_TESTS = [
 
 VERILOG_TESTS = [
     {
+        "name": "fft_butterfly_addr_gen",
+        "sources": [
+            "rtl/dsp/fft_butterfly_addr_gen.v",
+            "tb/fft_butterfly_addr_gen_tb.v",
+        ],
+    },
+    {
         "name": "fft_radix2_core",
         "sources": [
             "rtl/dsp/fft_bit_reverse.v",
