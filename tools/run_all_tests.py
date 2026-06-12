@@ -28,6 +28,10 @@ VECTOR_TESTS = [
         "name": "fft_test_vectors",
         "command": [sys.executable, "tools/generate_fft_test_vectors.py"],
     },
+    {
+        "name": "fft_radix2_core_vectors",
+        "command": [sys.executable, "tools/generate_fft_radix2_core_vectors.py"],
+    },
 ]
 
 VERILOG_TESTS = [
