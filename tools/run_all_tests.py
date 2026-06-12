@@ -17,6 +17,10 @@ PYTHON_TESTS = [
         "name": "fft_reference_model",
         "command": [sys.executable, "tools/test_fft_reference_model.py"],
     },
+    {
+        "name": "fft_radix2_fixed_model",
+        "command": [sys.executable, "tools/test_fft_radix2_fixed_model.py"],
+    },
 ]
 
 VECTOR_TESTS = [
