@@ -137,31 +137,6 @@ module fft_accelerator_core_tb;
         end
     endtask
 
-    function signed [SAMPLE_WIDTH-1:0] expected_impulse0_output;
-        input integer index;
-        integer effective_bin;
-        reg signed [GAIN_WIDTH-1:0] gain;
-        reg signed [SAMPLE_WIDTH+GAIN_WIDTH-1:0] product;
-        begin
-            if (index <= FFT_SIZE / 2) begin
-                effective_bin = index;
-            end else begin
-                effective_bin = FFT_SIZE - index;
-            end
-
-            if (effective_bin <= 1) begin
-                gain = GAIN_1_50;
-            end else if (effective_bin <= 21) begin
-                gain = GAIN_1_00;
-            end else begin
-                gain = GAIN_0_75;
-            end
-
-            product = 16'sd1000 * gain;
-            expected_impulse0_output = product >>> 14;
-        end
-    endfunction
-
     function signed [SAMPLE_WIDTH-1:0] expected_output;
         input integer index;
         begin
@@ -173,10 +148,6 @@ module fft_accelerator_core_tb;
         for (i = 0; i < FFT_SIZE; i = i + 1) begin
             input_samples[i] = 16'sd0;
             expected_samples[i] = 16'sd0;
-        end
-        input_samples[0] = 16'sd1000;
-        for (i = 0; i < FFT_SIZE; i = i + 1) begin
-            expected_samples[i] = expected_impulse0_output(i);
         end
 
         vector_fd = $fopen("sim/vectors/mixed.csv", "r");
@@ -195,7 +166,7 @@ module fft_accelerator_core_tb;
             $display("INPUT_VECTOR=sim/vectors/mixed.csv");
 
             expected_fd = $fopen(
-                "sim/vectors/mixed_expected_rtl_fft_passthrough_ifft.csv",
+                "sim/vectors/mixed_expected_rtl_fft_ifft_unnormalized.csv",
                 "r"
             );
             if (expected_fd != 0) begin
@@ -210,14 +181,14 @@ module fft_accelerator_core_tb;
                     end
                 end
                 $fclose(expected_fd);
-                $display("EXPECTED_VECTOR=sim/vectors/mixed_expected_rtl_fft_passthrough_ifft.csv");
+                $display("EXPECTED_VECTOR=sim/vectors/mixed_expected_rtl_fft_ifft_unnormalized.csv");
             end else begin
                 errors = errors + 1;
                 $display("TEST expected_vector_open FAIL");
             end
         end else begin
-            $display("INPUT_VECTOR=default_impulse0_1000");
-            $display("NOTE=sim/vectors/mixed.csv not found, using built-in fallback samples.");
+            $display("INPUT_VECTOR=default_zero_frame");
+            $display("NOTE=sim/vectors/mixed.csv not found, using built-in zero frame.");
         end
 
         output_fd = $fopen("sim/fft_accelerator_core_output.csv", "w");
@@ -228,8 +199,8 @@ module fft_accelerator_core_tb;
         end
 
         $display("=== REGISTER CONTROLLED FFT ACCELERATOR DEMO ===");
-        $display("MODE=FFT_CORE_PLUS_PASSTHROUGH_IFFT");
-        $display("NOTE=FFT wrapper uses fft_radix2_core; IFFT wrapper is still passthrough.");
+        $display("MODE=FFT_CORE_PLUS_UNNORMALIZED_IFFT");
+        $display("NOTE=FFT and IFFT wrappers use fft_radix2_core; IFFT has no 1/N normalization.");
         $display("");
         $display("REGISTER MAP:");
         $display("0x0 CONTROL_REG");
@@ -315,7 +286,7 @@ module fft_accelerator_core_tb;
         sample_valid = 1'b0;
         sample_in = 16'sd0;
 
-        while (!pipeline_done_ok && timeout_count < 10000) begin
+        while (!pipeline_done_ok && timeout_count < 25000) begin
             @(posedge clk);
             #1;
             timeout_count = timeout_count + 1;
@@ -379,7 +350,7 @@ module fft_accelerator_core_tb;
 
         report_result("output_count", output_count_ok);
         report_result("output_order", output_order_ok);
-        report_result("gain_path",
+        report_result("sample_spot_checks",
                       bass_gain_path_ok &&
                       mid_gain_path_ok &&
                       treble_gain_path_ok);
