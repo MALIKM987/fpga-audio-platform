@@ -5,8 +5,22 @@
     <Version>5</Version>
     <Device name="GW2AR-18C" pn="GW2AR-LV18QN88C8/I7">gw2ar18c-000</Device>
     <FileList>
+        <File path="src/complex_mult.v" type="file.verilog" enable="1"/>
+        <File path="src/fft_accel_wrapper.v" type="file.verilog" enable="1"/>
+        <File path="src/fft_bit_reverse.v" type="file.verilog" enable="1"/>
+        <File path="src/fft_butterfly_addr_gen.v" type="file.verilog" enable="1"/>
+        <File path="src/fft_ifft_accel_stub.v" type="file.verilog" enable="1"/>
+        <File path="src/fft_ifft_pipeline.v" type="file.verilog" enable="1"/>
+        <File path="src/fft_radix2_core.v" type="file.verilog" enable="1"/>
+        <File path="src/fft_twiddle_rom.v" type="file.verilog" enable="1"/>
         <File path="src/i2s_tx.v" type="file.verilog" enable="1"/>
+        <File path="src/ifft_accel_wrapper.v" type="file.verilog" enable="1"/>
+        <File path="src/sample_block_buffer.v" type="file.verilog" enable="1"/>
+        <File path="src/spectral_gain_select.v" type="file.verilog" enable="1"/>
+        <File path="src/spectral_processor.v" type="file.verilog" enable="1"/>
         <File path="src/tang_audio_top.v" type="file.verilog" enable="1"/>
+        <File path="src/tang_fft_ifft_selftest_top.v" type="file.verilog" enable="1"/>
+        <File path="src/tang_led_blink_top.v" type="file.verilog" enable="1"/>
         <File path="src/tone_gen.v" type="file.verilog" enable="1"/>
         <File path="src/tang_audio_hw.cst" type="file.cst" enable="1"/>
         <File path="src/constraints.sdc" type="file.sdc" enable="1"/>
