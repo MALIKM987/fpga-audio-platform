@@ -100,7 +100,44 @@ Nie zakładaj, że USB płytki automatycznie udostępnia UART z FPGA jako port C
 Jeżeli UART nie jest pewny, użyj potwierdzonego pinu `uart_tx` i zewnętrznego
 konwertera USB-UART 3.3 V.
 
-## 7. Co wkleić z powrotem do ChatGPT/Codex
+## 7. Wariant `tang_fft_ifft_selftest_top`
+
+Dla pierwszego testu sprzętowego realnego pipeline FFT/IFFT użyj osobnego topu:
+
+```text
+tang_fft_ifft_selftest_top
+```
+
+Ten top ma tylko porty `clk` i `led`, więc można użyć istniejących constraintów:
+
+```text
+clk -> pin 4
+led -> pin 15
+```
+
+Kroki:
+
+1. Dodaj do projektu Gowin pliki RTL opisane w
+   `docs/tang_fft_ifft_selftest_top.md`.
+2. Ustaw top module na `tang_fft_ifft_selftest_top`.
+3. Uruchom Synthesis.
+4. Sprawdź, czy `fft_radix2_core` występuje w aktywnej hierarchii/netliście.
+5. Spisz ostrzeżenia syntezy.
+6. Uruchom Place & Route.
+7. Spisz wykorzystanie LUT, FF, B-SRAM i DSP.
+8. Sprawdź timing/slack.
+9. Wygeneruj bitstream.
+10. Zaprogramuj Tang Nano.
+11. Obserwuj LED:
+
+    - test w toku: szybkie miganie,
+    - PASS: świecenie ciągłe,
+    - FAIL: wolne miganie.
+
+Jeżeli LED na płytce jest aktywny stanem niskim, zachowanie może wyglądać
+odwrócone. Wklej obserwację razem z raportami Gowin.
+
+## 8. Co wkleić z powrotem do ChatGPT/Codex
 
 Po teście wklej:
 

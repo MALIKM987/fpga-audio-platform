@@ -63,6 +63,12 @@ Checklistę lokalnej syntezy i testów Tang Nano zapisano w:
 docs/tang_nano_hardware_test_checklist.md
 ```
 
+Minimalny top do sprzętowego self-testu realnego pipeline FFT/IFFT opisano w:
+
+```text
+docs/tang_fft_ifft_selftest_top.md
+```
+
 ## Planowana architektura FFT/IFFT
 
 Moduły nowego kierunku zaimplementowane w obecnym etapie:
