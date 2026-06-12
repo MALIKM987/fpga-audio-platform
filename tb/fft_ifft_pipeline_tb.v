@@ -116,7 +116,7 @@ module fft_ifft_pipeline_tb;
             $display("INPUT_VECTOR=sim/vectors/impulse.csv");
 
             expected_fd = $fopen(
-                "sim/vectors/impulse_expected_rtl_fft_ifft_unnormalized.csv",
+                "sim/vectors/impulse_expected_rtl_fft_ifft_normalized.csv",
                 "r"
             );
             if (expected_fd != 0) begin
@@ -131,7 +131,7 @@ module fft_ifft_pipeline_tb;
                     end
                 end
                 $fclose(expected_fd);
-                $display("EXPECTED_VECTOR=sim/vectors/impulse_expected_rtl_fft_ifft_unnormalized.csv");
+                $display("EXPECTED_VECTOR=sim/vectors/impulse_expected_rtl_fft_ifft_normalized.csv");
             end else begin
                 errors = errors + 1;
                 $display("TEST expected_vector_open FAIL");
@@ -143,8 +143,8 @@ module fft_ifft_pipeline_tb;
 
         $display("=== FFT/IFFT PIPELINE MODEL TEST ===");
         $display("FFT_SIZE=%0d", FFT_SIZE);
-        $display("MODE=FFT_CORE_PLUS_UNNORMALIZED_IFFT");
-        $display("NOTE=IFFT output is not divided by FFT_SIZE in this stage.");
+        $display("MODE=FFT_CORE_PLUS_NORMALIZED_IFFT");
+        $display("NOTE=IFFT output is divided by FFT_SIZE through arithmetic shift by 8.");
         $display("");
 
         repeat (3) @(posedge clk);

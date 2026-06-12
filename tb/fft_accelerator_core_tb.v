@@ -166,7 +166,7 @@ module fft_accelerator_core_tb;
             $display("INPUT_VECTOR=sim/vectors/mixed.csv");
 
             expected_fd = $fopen(
-                "sim/vectors/mixed_expected_rtl_fft_ifft_unnormalized.csv",
+                "sim/vectors/mixed_expected_rtl_fft_ifft_normalized.csv",
                 "r"
             );
             if (expected_fd != 0) begin
@@ -181,7 +181,7 @@ module fft_accelerator_core_tb;
                     end
                 end
                 $fclose(expected_fd);
-                $display("EXPECTED_VECTOR=sim/vectors/mixed_expected_rtl_fft_ifft_unnormalized.csv");
+                $display("EXPECTED_VECTOR=sim/vectors/mixed_expected_rtl_fft_ifft_normalized.csv");
             end else begin
                 errors = errors + 1;
                 $display("TEST expected_vector_open FAIL");
@@ -199,8 +199,8 @@ module fft_accelerator_core_tb;
         end
 
         $display("=== REGISTER CONTROLLED FFT ACCELERATOR DEMO ===");
-        $display("MODE=FFT_CORE_PLUS_UNNORMALIZED_IFFT");
-        $display("NOTE=FFT and IFFT wrappers use fft_radix2_core; IFFT has no 1/N normalization.");
+        $display("MODE=FFT_CORE_PLUS_NORMALIZED_IFFT");
+        $display("NOTE=FFT and IFFT wrappers use fft_radix2_core; IFFT applies 1/N normalization.");
         $display("");
         $display("REGISTER MAP:");
         $display("0x0 CONTROL_REG");

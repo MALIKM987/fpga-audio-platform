@@ -47,8 +47,8 @@ def apply_current_rtl_q2_14(sample: int, gain: int) -> int:
     return wrap_int16((int(sample) * int(gain)) >> 14)
 
 
-def rtl_fft_ifft_unnormalized_model(samples: list[int], size: int = FFT_SIZE) -> list[int]:
-    """Model current RTL: FFT core, spectral gain, unnormalized IFFT core."""
+def rtl_fft_ifft_normalized_model(samples: list[int], size: int = FFT_SIZE) -> list[int]:
+    """Model current RTL: FFT core, spectral gain, normalized IFFT core."""
 
     zero_imag = [0] * size
     fft_real, fft_imag = fft_radix2_core_fixed_model(samples[:size], zero_imag)
@@ -77,7 +77,7 @@ def rtl_fft_ifft_unnormalized_model(samples: list[int], size: int = FFT_SIZE) ->
 def generate_vectors() -> int:
     print("=== FFT TEST VECTOR GENERATOR ===")
     print(f"FFT_SIZE={FFT_SIZE}")
-    print("RTL_MODEL=FFT_CORE_PLUS_SPECTRAL_GAIN_PLUS_UNNORMALIZED_IFFT")
+    print("RTL_MODEL=FFT_CORE_PLUS_SPECTRAL_GAIN_PLUS_NORMALIZED_IFFT")
     print("MATH_MODEL=DFT_SPECTRAL_GAIN_IDFT")
     print("")
 
@@ -88,7 +88,7 @@ def generate_vectors() -> int:
             saturate_int16(sample)
             for sample in generate_test_frame(kind, FFT_SIZE)
         ]
-        expected_rtl = rtl_fft_ifft_unnormalized_model(input_samples, FFT_SIZE)
+        expected_rtl = rtl_fft_ifft_normalized_model(input_samples, FFT_SIZE)
         expected_math = process_frame_reference(
             input_samples,
             bass_gain=DEFAULT_BASS_GAIN,
@@ -99,7 +99,7 @@ def generate_vectors() -> int:
 
         write_csv(VECTOR_DIR / f"{kind}.csv", input_samples)
         write_csv(
-            VECTOR_DIR / f"{kind}_expected_rtl_fft_ifft_unnormalized.csv",
+            VECTOR_DIR / f"{kind}_expected_rtl_fft_ifft_normalized.csv",
             expected_rtl,
         )
         write_csv(VECTOR_DIR / f"{kind}_expected_math_reference.csv", expected_math)

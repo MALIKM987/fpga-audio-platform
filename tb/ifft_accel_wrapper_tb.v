@@ -273,8 +273,8 @@ module ifft_accel_wrapper_tb;
     initial begin
         $display("=== IFFT ACCEL WRAPPER TEST ===");
         $display("FFT_SIZE=%0d", FFT_SIZE);
-        $display("MODE=RADIX2_INVERSE_CORE_UNNORMALIZED");
-        $display("NOTE=No 1/N normalization is applied in this wrapper.");
+        $display("MODE=RADIX2_INVERSE_CORE_NORMALIZED");
+        $display("NOTE=1/N normalization is applied as arithmetic shift by 8.");
         $display("");
 
         run_frame_test(

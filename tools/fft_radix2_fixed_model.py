@@ -4,7 +4,8 @@
 This model mirrors the current RTL behavior of rtl/dsp/fft_radix2_core.v.
 It is intentionally not an ideal floating-point FFT reference.  It models the
 Q2.14 twiddle ROM, the combinational complex multiplier, bit-reversed loading,
-radix-2 butterfly address generation, and 16-bit wraparound/truncation.
+radix-2 butterfly address generation, 16-bit wraparound/truncation, and inverse
+1/N output normalization for N=256.
 """
 
 from __future__ import annotations
@@ -193,6 +194,7 @@ def fft_radix2_core_fixed_model(
     real_samples: list[int],
     imag_samples: list[int] | None = None,
     inverse: bool = False,
+    normalize_inverse: bool = True,
 ) -> tuple[list[int], list[int]]:
     """Run the same frame-level computation as the current RTL core."""
 
@@ -234,5 +236,9 @@ def fft_radix2_core_fixed_model(
             imag_mem[addr_a] = out_a_imag
             real_mem[addr_b] = out_b_real
             imag_mem[addr_b] = out_b_imag
+
+    if inverse and normalize_inverse:
+        real_mem = [wrap_int16(value >> INDEX_WIDTH) for value in real_mem]
+        imag_mem = [wrap_int16(value >> INDEX_WIDTH) for value in imag_mem]
 
     return list(real_mem), list(imag_mem)

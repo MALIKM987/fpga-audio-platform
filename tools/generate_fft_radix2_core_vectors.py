@@ -63,6 +63,7 @@ def main() -> int:
     print("=== FFT RADIX-2 CORE VECTOR GENERATOR ===")
     print(f"FFT_SIZE={FFT_SIZE}")
     print("FORMAT=decimal real_in imag_in expected_real expected_imag")
+    print("IFFT_NORMALIZATION=1/256_ARITH_SHIFT_RIGHT_8")
     print("")
 
     changed_count = 0
