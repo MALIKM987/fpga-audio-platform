@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare RTL pipeline CSV output against the current RTL passthrough model."""
+"""Compare RTL pipeline CSV output against the current staged RTL model."""
 
 from __future__ import annotations
 
@@ -53,10 +53,10 @@ def main() -> int:
 
     rtl_output = Path(args.rtl_output)
     vector_dir = Path(args.vector_dir)
-    expected_path = vector_dir / f"{args.frame}_expected_rtl_passthrough.csv"
+    expected_path = vector_dir / f"{args.frame}_expected_rtl_fft_passthrough_ifft.csv"
 
     print("=== FFT PIPELINE OUTPUT COMPARISON ===")
-    print("MODE=RTL_PASSTHROUGH_MODEL")
+    print("MODE=RTL_FFT_CORE_PLUS_PASSTHROUGH_IFFT_MODEL")
     print(f"INPUT_FRAME={args.frame}")
 
     if not rtl_output.exists():
