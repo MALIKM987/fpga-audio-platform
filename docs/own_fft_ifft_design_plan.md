@@ -28,9 +28,10 @@ edukacyjnej i obronieniowej.
 
 Obecne `fft_accel_wrapper.v` i `ifft_accel_wrapper.v` korzystają już ze
 wspólnego `fft_radix2_core.v`: wrapper FFT używa `inverse=0`, a wrapper IFFT
-używa `inverse=1`. IFFT nadal nie wykonuje normalizacji `1/N`, więc pełny tor
-FFT -> gain -> IFFT ma znane ograniczenie amplitudy i wymaga kolejnego etapu
-skalowania oraz walidacji end-to-end.
+używa `inverse=1`. Dla trybu IFFT dodano normalizację `1/N` dla `N = 256`,
+realizowaną jako arytmetyczne przesunięcie w prawo o 8 bitów w stanie
+wyjściowym rdzenia. Model bit-exact w Pythonie i testbenche Verilog zostały
+zaktualizowane tak, aby odpowiadały tej wersji RTL.
 
 ## 3. Wybór algorytmu
 
@@ -72,9 +73,9 @@ ifft_accel_wrapper
     -> own_ifft_radix2_core
 ```
 
-Dzięki temu reszta projektu może zachować stabilny interfejs, a wewnętrzna
-implementacja wrapperów zostanie wymieniona z passthrough na własny rdzeń FFT
-lub IFFT.
+Dzięki temu reszta projektu zachowuje stabilny interfejs, a wewnętrzna
+implementacja wrapperów może używać własnego rdzenia FFT/IFFT albo w przyszłości
+wariantu porównawczego z Gowin FFT IP.
 
 ## 5. Interfejs rdzenia
 
@@ -213,9 +214,10 @@ Są dwie sensowne opcje implementacji IFFT:
 IFFT(x) = conj(FFT(conj(x))) / N
 ```
 
-Dla `N = 256` dzielenie przez `N` można wykonać jako przesunięcie o 8 bitów w
-prawo. Trzeba jednak uwzględnić wcześniejsze skalowanie etapowe, aby nie
-podzielić sygnału dwa razy.
+Dla `N = 256` dzielenie przez `N` jest obecnie wykonywane jako arytmetyczne
+przesunięcie o 8 bitów w prawo na wyjściu trybu `inverse`. Forward FFT nie jest
+normalizowana. Dalsze wersje mogą dodać skalowanie etapowe lub saturację, ale
+obecny krok utrzymuje minimalną zmianę: tylko końcową normalizację IFFT.
 
 Wersja z trybem `inverse` jest wygodna sprzętowo, bo pozwala współdzielić ROM,
 liczniki, mnożnik zespolony i logikę butterfly.
@@ -273,19 +275,15 @@ Testy powinny wykorzystać istniejące narzędzia:
 - `tools/generate_fft_test_vectors.py`,
 - `tools/compare_fft_pipeline_outputs.py`.
 
-Obecnie RTL jest porównywany z:
+Obecnie RTL jest porównywany z modelem aktualnego toru:
 
 ```text
-rtl_passthrough_model
+FFT core -> spectral gain -> normalized IFFT core
 ```
 
-Po implementacji własnego FFT/IFFT porównanie powinno przejść na:
-
-```text
-math_reference_model
-```
-
-Należy testować co najmniej:
+Model floating-point `math_reference_model` pozostaje punktem odniesienia dla
+analizy jakości, ale testy PASS/FAIL używają bit-exact modelu RTL. Należy
+testować co najmniej:
 
 - impuls,
 - sygnał stały,
@@ -310,7 +308,8 @@ Proponowana kolejność prac:
 5. tryb `inverse`
 6. `ifft_radix2_core_tb.v` albo wspólny test FFT/IFFT
 7. podłączenie do wrapperów
-8. porównanie CSV z `math_reference_model`
+8. normalizację IFFT `1/N`
+9. porównanie CSV z bit-exact modelem RTL
 
 Warto utrzymać małe PR-y. Każdy nowy moduł powinien mieć własny testbench i
 czytelny raport `STATUS=PASS` albo `STATUS=FAIL`.
@@ -342,5 +341,11 @@ Gowin FFT IP pozostaje w projekcie jako opcja późniejszej optymalizacji albo
 wariant porównawczy. Scaffold i checklisty dla Gowin IP są nadal przydatne, ale
 nie zastępują planu własnej implementacji.
 
-Następny etap implementacyjny powinien rozpocząć się od małego, osobnego PR dla
-`fft_twiddle_rom.v` i testu generowanych współczynników.
+## 17. Status przed testem sprzętowym
+
+Aktualny stan jest przygotowany do lokalnej próby syntezy w Gowin EDA i do
+pierwszych testów na Tang Nano, ale nie oznacza jeszcze potwierdzenia
+sprzętowego. W tym PR nie wygenerowano bitstreamu, nie uruchomiono Place & Route
+i nie zmierzono zasobów ani timingów. Użytkownik powinien lokalnie uruchomić
+Gowin, zebrać raport wykorzystania LUT/FF/B-SRAM/DSP oraz raport timing/Fmax,
+a następnie wkleić wyniki z powrotem do dalszej analizy.

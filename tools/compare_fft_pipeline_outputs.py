@@ -53,10 +53,10 @@ def main() -> int:
 
     rtl_output = Path(args.rtl_output)
     vector_dir = Path(args.vector_dir)
-    expected_path = vector_dir / f"{args.frame}_expected_rtl_fft_ifft_unnormalized.csv"
+    expected_path = vector_dir / f"{args.frame}_expected_rtl_fft_ifft_normalized.csv"
 
     print("=== FFT PIPELINE OUTPUT COMPARISON ===")
-    print("MODE=RTL_FFT_CORE_PLUS_UNNORMALIZED_IFFT_MODEL")
+    print("MODE=RTL_FFT_CORE_PLUS_NORMALIZED_IFFT_MODEL")
     print(f"INPUT_FRAME={args.frame}")
 
     if not rtl_output.exists():

@@ -96,11 +96,29 @@ def test_zero_frame() -> bool:
     return all(value == 0 for value in real_out) and all(value == 0 for value in imag_out)
 
 
-def test_impulse0() -> bool:
+def test_fft_impulse0_still_all_bins() -> bool:
     real_samples = [0] * FFT_SIZE
     real_samples[0] = Q2_14_ONE
     real_out, imag_out = fft_radix2_core_fixed_model(real_samples)
     return all(value == Q2_14_ONE for value in real_out) and all(
+        value == 0 for value in imag_out
+    )
+
+
+def test_ifft_zero_frame() -> bool:
+    real_out, imag_out = fft_radix2_core_fixed_model(
+        [0] * FFT_SIZE,
+        inverse=True,
+    )
+    return all(value == 0 for value in real_out) and all(value == 0 for value in imag_out)
+
+
+def test_ifft_impulse0_normalized() -> bool:
+    real_samples = [0] * FFT_SIZE
+    real_samples[0] = Q2_14_ONE
+    real_out, imag_out = fft_radix2_core_fixed_model(real_samples, inverse=True)
+    expected = Q2_14_ONE >> 8
+    return all(value == expected for value in real_out) and all(
         value == 0 for value in imag_out
     )
 
@@ -170,18 +188,58 @@ def test_simple_two_sample() -> bool:
     )
 
 
+def max_abs_error(actual: list[int], expected: list[int]) -> int:
+    return max(abs(a - e) for a, e in zip(actual, expected))
+
+
+def fft_then_ifft_roundtrip(real_samples: list[int]) -> tuple[list[int], list[int]]:
+    imag_samples = [0] * FFT_SIZE
+    fft_real, fft_imag = fft_radix2_core_fixed_model(real_samples, imag_samples)
+    return fft_radix2_core_fixed_model(fft_real, fft_imag, inverse=True)
+
+
+def test_fft_then_ifft_identity_small_signal() -> bool:
+    real_samples = [0] * FFT_SIZE
+    real_samples[0] = 64
+    real_samples[1] = -32
+    real_samples[2] = 16
+    real_samples[7] = 8
+
+    real_out, imag_out = fft_then_ifft_roundtrip(real_samples)
+    return (
+        max_abs_error(real_out, real_samples) <= 1
+        and max_abs_error(imag_out, [0] * FFT_SIZE) <= 1
+    )
+
+
+def test_fft_then_ifft_identity_mixed_small_signal() -> bool:
+    real_samples = [(((index % 16) - 8) * 2) for index in range(FFT_SIZE)]
+    real_out, imag_out = fft_then_ifft_roundtrip(real_samples)
+    return (
+        max_abs_error(real_out, real_samples) <= 1
+        and max_abs_error(imag_out, [0] * FFT_SIZE) <= 1
+    )
+
+
 def main() -> int:
     print("=== FFT RADIX-2 BIT-EXACT FIXED MODEL TEST ===")
     print(f"FFT_SIZE={FFT_SIZE}")
     print("FORMAT=Q2.14")
-    print("MODE=RTL_WRAPAROUND_TRUNCATION")
+    print("MODE=RTL_WRAPAROUND_TRUNCATION_WITH_NORMALIZED_IFFT")
     print("")
 
     report("helpers", test_helpers())
     report("zero_frame", test_zero_frame())
-    report("impulse0", test_impulse0())
+    report("fft_impulse0_still_all_bins", test_fft_impulse0_still_all_bins())
+    report("ifft_zero_frame", test_ifft_zero_frame())
+    report("ifft_impulse0_normalized", test_ifft_impulse0_normalized())
     report("impulse1_basic_properties", test_impulse1_basic_properties())
     report("simple_two_sample", test_simple_two_sample())
+    report("fft_then_ifft_identity_small_signal", test_fft_then_ifft_identity_small_signal())
+    report(
+        "fft_then_ifft_identity_mixed_small_signal",
+        test_fft_then_ifft_identity_mixed_small_signal(),
+    )
 
     if ERRORS == 0:
         print("STATUS=PASS")

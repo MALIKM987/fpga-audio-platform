@@ -13,8 +13,8 @@
 // version uses simple wraparound/truncation after add/sub; scaling and
 // saturation can be improved later.
 //
-// This core is standalone and is not connected to the current passthrough
-// FFT/IFFT wrappers yet.
+// In inverse mode, the output stage applies 1/N normalization for N=256 by
+// arithmetic right-shifting by 8 bits. Forward FFT mode is not normalized.
 
 module fft_radix2_core #(
     parameter integer FFT_SIZE    = 256,
@@ -318,8 +318,13 @@ module fft_radix2_core #(
                     busy <= 1'b1;
                     out_valid <= 1'b1;
                     out_index <= output_count[INDEX_WIDTH-1:0];
-                    real_out <= real_mem[output_count[INDEX_WIDTH-1:0]];
-                    imag_out <= imag_mem[output_count[INDEX_WIDTH-1:0]];
+                    if (inverse_latched) begin
+                        real_out <= real_mem[output_count[INDEX_WIDTH-1:0]] >>> 8;
+                        imag_out <= imag_mem[output_count[INDEX_WIDTH-1:0]] >>> 8;
+                    end else begin
+                        real_out <= real_mem[output_count[INDEX_WIDTH-1:0]];
+                        imag_out <= imag_mem[output_count[INDEX_WIDTH-1:0]];
+                    end
 
                     if (output_count == FFT_SIZE - 1) begin
                         output_count <= output_count + 1'b1;

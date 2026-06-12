@@ -112,6 +112,7 @@ module fft_radix2_core_tb;
     task run_frame_test;
         input [8*32-1:0] test_name;
         input [8*96-1:0] vector_path;
+        input inverse_mode;
         integer case_errors;
         integer load_ok;
         integer reset_ok;
@@ -151,7 +152,7 @@ module fft_radix2_core_tb;
             @(negedge clk);
             rst = 1'b0;
             start = 1'b1;
-            inverse = 1'b0;
+            inverse = inverse_mode;
 
             @(posedge clk);
             #1;
@@ -284,10 +285,15 @@ module fft_radix2_core_tb;
         $display("MODE=RTL_VS_BIT_EXACT_PYTHON_MODEL");
         $display("");
 
-        run_frame_test("zero_frame", "tb/generated/fft_radix2_core_zero_frame.mem");
-        run_frame_test("impulse0", "tb/generated/fft_radix2_core_impulse0.mem");
-        run_frame_test("impulse1", "tb/generated/fft_radix2_core_impulse1.mem");
-        run_frame_test("two_sample", "tb/generated/fft_radix2_core_two_sample.mem");
+        run_frame_test("fft_zero_frame", "tb/generated/fft_radix2_core_zero_frame.mem", 1'b0);
+        run_frame_test("fft_impulse0", "tb/generated/fft_radix2_core_impulse0.mem", 1'b0);
+        run_frame_test("fft_impulse1", "tb/generated/fft_radix2_core_impulse1.mem", 1'b0);
+        run_frame_test("fft_two_sample", "tb/generated/fft_radix2_core_two_sample.mem", 1'b0);
+
+        run_frame_test("ifft_zero_frame", "tb/generated/ifft_radix2_core_zero_frame.mem", 1'b1);
+        run_frame_test("ifft_impulse0", "tb/generated/ifft_radix2_core_impulse0.mem", 1'b1);
+        run_frame_test("ifft_impulse1", "tb/generated/ifft_radix2_core_impulse1.mem", 1'b1);
+        run_frame_test("ifft_two_sample", "tb/generated/ifft_radix2_core_two_sample.mem", 1'b1);
 
         $display("");
         if (errors == 0) begin

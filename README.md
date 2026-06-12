@@ -51,6 +51,18 @@ ograniczeń i kolejnych kroków znajduje się w:
 docs/project_milestone_summary.md
 ```
 
+Główna, skonsolidowana dokumentacja projektu znajduje się w:
+
+```text
+docs/dokumentacja_projektu_fpga_audio_platform.md
+```
+
+Checklistę lokalnej syntezy i testów Tang Nano zapisano w:
+
+```text
+docs/tang_nano_hardware_test_checklist.md
+```
+
 ## Planowana architektura FFT/IFFT
 
 Moduły nowego kierunku zaimplementowane w obecnym etapie:
@@ -58,8 +70,9 @@ Moduły nowego kierunku zaimplementowane w obecnym etapie:
 - `rtl/dsp/sample_block_buffer.v`
 - `rtl/dsp/spectral_gain_select.v`
 - `rtl/dsp/spectral_processor.v`
-- `rtl/dsp/fft_accel_wrapper.v` jako model passthrough interfejsu FFT.
-- `rtl/dsp/ifft_accel_wrapper.v` jako model passthrough interfejsu IFFT.
+- `rtl/dsp/fft_radix2_core.v` jako własny sekwencyjny rdzeń FFT/IFFT radix-2.
+- `rtl/dsp/fft_accel_wrapper.v` jako cienki wrapper FFT z `inverse=0`.
+- `rtl/dsp/ifft_accel_wrapper.v` jako cienki wrapper IFFT z `inverse=1`.
 - `rtl/dsp/fft_ifft_pipeline.v` jako model integracyjny przepływu danych.
 - `rtl/control/fft_control_regs.v` jako bank rejestrów CONTROL/STATUS/PARAM.
 - `rtl/control/fft_accelerator_core.v` jako moduł nadrzędny akceleratora
@@ -72,7 +85,7 @@ Moduły nowego kierunku zaimplementowane w obecnym etapie:
 
 Moduły nadal oznaczone jako TODO:
 
-- prawdziwy algorytm FFT/IFFT,
+- saturacja i dalsze skalowanie fixed-point,
 - integracja Gowin FFT IP,
 - fizyczny I2S,
 - UART/self-test dla nowego pipeline,
@@ -80,16 +93,15 @@ Moduły nadal oznaczone jako TODO:
 - UART bridge do banku rejestrów,
 - hardware PCM1808/PCM5102A.
 
-`sample_block_buffer` zbiera ramkę próbek dla przyszłego FFT, a
-`spectral_gain_select` i `spectral_processor` wybierają pasmo binu FFT i stosują
-gain Q2.14 do części rzeczywistej oraz urojonej. Wrappery FFT/IFFT są obecnie
-modelami passthrough, a `fft_ifft_pipeline` sprawdza sterowanie, indeksy i
-przepływ danych przez cały tor. Nie potwierdza to jeszcze matematycznej
-poprawności FFT/IFFT. `fft_control_regs` dodaje prosty interfejs rejestrowy
-CONTROL/STATUS/PARAM podobny metodologicznie do AXI-Lite, ale niezależny od
-konkretnej magistrali. `fft_accelerator_core` łączy ten bank rejestrów z
-modelem pipeline, tak że zapis bitu START w CONTROL uruchamia przetwarzanie,
-a STATUS pokazuje busy/done/overflow/error.
+`sample_block_buffer` zbiera ramkę próbek, a `spectral_gain_select` i
+`spectral_processor` wybierają pasmo binu FFT i stosują gain Q2.14 do części
+rzeczywistej oraz urojonej. Wrappery FFT/IFFT korzystają już z
+`fft_radix2_core.v`; IFFT ma normalizację `1/N` dla `N = 256` wykonaną jako
+arytmetyczne przesunięcie o 8 bitów. `fft_control_regs` dodaje prosty interfejs
+rejestrowy CONTROL/STATUS/PARAM podobny metodologicznie do AXI-Lite, ale
+niezależny od konkretnej magistrali. `fft_accelerator_core` łączy ten bank
+rejestrów z pipeline, tak że zapis bitu START w CONTROL uruchamia
+przetwarzanie, a STATUS pokazuje busy/done/overflow/error.
 
 ## Aktywny self-test
 
@@ -176,8 +188,9 @@ Zaimplementowane:
 - `sample_block_buffer` jako bufor ramki próbek dla przyszłego FFT.
 - `spectral_gain_select` i `spectral_processor` jako pierwszy blok modyfikacji
   binów widmowych przez gain Q2.14.
-- `fft_accel_wrapper` i `ifft_accel_wrapper` jako modele passthrough interfejsów
-  przyszłych akceleratorów.
+- `fft_radix2_core` jako własny sekwencyjny rdzeń radix-2 dla FFT/IFFT.
+- `fft_accel_wrapper` i `ifft_accel_wrapper` jako cienkie wrappery nad
+  `fft_radix2_core`, odpowiednio z `inverse=0` i `inverse=1`.
 - `fft_ifft_pipeline` jako model integracyjny:
   `sample_block_buffer -> fft_accel_wrapper -> spectral_processor ->`
   `ifft_accel_wrapper`.
@@ -193,7 +206,7 @@ Niezaimplementowane jeszcze:
 - Stabilny tor wejsciowy PCM1808 -> `i2s_rx_stereo`.
 - Pelny BYPASS ADC -> FPGA -> DAC.
 - Pelne przypisanie pinow dla PCM1808/PCM5102A.
-- Prawdziwy FFT/IFFT.
+- Saturacja i dalsze skalowanie fixed-point.
 - Gowin FFT IP.
 - AXI-Lite.
 - UART bridge do banku rejestrów.
@@ -396,10 +409,10 @@ rejestrów są opisane w `docs/register_control_demo.md`.
 `scipy`, dzięki czemu może być uruchamiany w prostym środowisku testowym oraz w
 GitHub Actions.
 
-Model służy do późniejszego porównania wyników z Gowin FFT IP albo własną
-implementacją RTL FFT/IFFT. Aktualne wrappery RTL `fft_accel_wrapper.v` i
-`ifft_accel_wrapper.v` nadal są modelami passthrough i nie wykonują jeszcze
-prawdziwej FFT/IFFT.
+Model służy do porównania wyników własnej implementacji RTL FFT/IFFT oraz
+późniejszego wariantu z Gowin FFT IP. Aktualne wrappery RTL
+`fft_accel_wrapper.v` i `ifft_accel_wrapper.v` korzystają już z
+`fft_radix2_core.v`, a model bit-exact odzwierciedla ich zachowanie.
 
 Testy modelu uruchamia ten sam runner:
 
@@ -416,11 +429,15 @@ Projekt generuje powtarzalne wektory CSV dla ramek `impulse`, `constant`,
 ramki powstaje oczekiwany wynik obecnego RTL oraz osobny wynik matematycznego
 modelu FFT/IFFT.
 
-Obecny RTL jest porównywany z modelem `rtl_passthrough_model`, ponieważ
-`fft_accel_wrapper.v` i `ifft_accel_wrapper.v` nadal są modelami passthrough.
+Obecny RTL jest porównywany z modelem bit-exact aktualnego toru:
+
+```text
+FFT core -> spectral gain -> normalized IFFT core
+```
+
 Model matematyczny `math_reference_model` pozostaje golden reference dla
-przyszłego Gowin FFT IP albo własnej implementacji RTL FFT/IFFT, ale nie jest
-jeszcze kryterium PASS/FAIL dla obecnego pipeline.
+analizy jakości oraz przyszłego wariantu z Gowin FFT IP, ale kryterium PASS/FAIL
+dla obecnego pipeline jest model zgodny bitowo z RTL.
 
 Pełny przepływ uruchamia:
 
@@ -440,14 +457,14 @@ skalowania, IFFT i testowania opisano w:
 docs/own_fft_ifft_design_plan.md
 ```
 
-Obecne `fft_accel_wrapper.v` i `ifft_accel_wrapper.v` nadal są modelami
-passthrough. Gowin FFT IP zostaje jako opcja przyszłej optymalizacji albo
-wariant porównawczy, ale nie jest pierwszym wyborem implementacyjnym.
+Obecne `fft_accel_wrapper.v` i `ifft_accel_wrapper.v` używają już
+`fft_radix2_core.v`. Gowin FFT IP zostaje jako opcja przyszłej optymalizacji
+albo wariant porównawczy, ale nie jest pierwszym wyborem implementacyjnym.
 
 ## Plan integracji Gowin FFT IP
 
-Plan zastąpienia obecnych wrapperów passthrough prawdziwym Gowin FFT/IFFT IP
-jest opisany w:
+Plan porównania lub ewentualnego zastąpienia własnego rdzenia blokami Gowin
+FFT/IFFT IP jest opisany w:
 
 ```text
 docs/gowin_fft_ip_integration_plan.md
@@ -507,14 +524,15 @@ pull requestów do `fpga-only-fft-console`.
 - Tor PCM1808 -> FPGA -> PCM5102A nie jest jeszcze zaimplementowany.
 - Aktualne topy EQ/testowe korzystaja z lokalnego generatora w FPGA.
 - Obecny `i2s_tx` wymaga dalszej pracy nad handshake/sample tick.
-- Prawdziwe FFT/IFFT nie jest jeszcze zaimplementowane. Obecne wrappery FFT/IFFT
-  oraz `fft_ifft_pipeline` są modelami passthrough do weryfikacji interfejsu,
-  sterowania i kolejności próbek.
+- Własny rdzeń FFT/IFFT jest zaimplementowany i podłączony do wrapperów, ale
+  nadal wymaga lokalnego sprawdzenia syntezy, zasobów i timingu w Gowin EDA.
+- Obecna wersja nie ma jeszcze potwierdzonego testu na Tang Nano.
+- Brakuje jeszcze fizycznego I2S i top-levelu testowego dla nowego pipeline.
 
 ## Nastepne kroki
 
-- Dopracowac plan weryfikacji FPGA-only po dodaniu modelu integracyjnego.
-- Zastapic modele passthrough prawdziwym FFT/IFFT albo Gowin FFT IP.
+- Uruchomic lokalnie synteze i Place & Route w Gowin EDA.
+- Spisac zasoby LUT/FF/B-SRAM/DSP oraz timing/Fmax z raportow Gowin.
 - Dodac UART/self-test dla nowego pipeline.
 - Utrzymywac raport konsolowy PASS/FAIL dla kazdego nowego modulu.
 - Dopiero po stabilnym pipeline FFT/IFFT wrocic do warstwy PCM1808/PCM5102A.
