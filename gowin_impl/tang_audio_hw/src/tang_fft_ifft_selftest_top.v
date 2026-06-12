@@ -58,9 +58,9 @@ module tang_fft_ifft_selftest_top #(
     assign fast_blink = blink_counter[FAST_BLINK_BIT];
     assign slow_blink = blink_counter[SLOW_BLINK_BIT];
 
-    assign led = pass_latched ? 1'b1 :
-                 fail_latched ? slow_blink :
-                 fast_blink;
+    assign led = ~(pass_latched ? 1'b1 :
+               fail_latched ? slow_blink :
+               fast_blink);
 
     fft_ifft_pipeline #(
         .FFT_SIZE(FFT_SIZE),
