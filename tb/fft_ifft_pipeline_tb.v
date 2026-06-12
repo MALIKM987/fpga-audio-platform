@@ -101,7 +101,8 @@ module fft_ifft_pipeline_tb;
     initial begin
         $display("=== FFT/IFFT PIPELINE MODEL TEST ===");
         $display("FFT_SIZE=%0d", FFT_SIZE);
-        $display("MODE=MODEL_PASSTHROUGH");
+        $display("MODE=FFT_CORE_PLUS_PASSTHROUGH_IFFT");
+        $display("NOTE=Input frame is impulse0, so FFT bins are constant before gain.");
         $display("");
 
         repeat (3) @(posedge clk);
@@ -118,14 +119,18 @@ module fft_ifft_pipeline_tb;
         for (i = 0; i < FFT_SIZE; i = i + 1) begin
             @(negedge clk);
             sample_valid = 1'b1;
-            sample_in = 16'sd1000;
+            if (i == 0) begin
+                sample_in = 16'sd1000;
+            end else begin
+                sample_in = 16'sd0;
+            end
         end
 
         @(negedge clk);
         sample_valid = 1'b0;
         sample_in = 16'sd0;
 
-        while (!done_ok && timeout_count < 3000) begin
+        while (!done_ok && timeout_count < 10000) begin
             @(posedge clk);
             #1;
             timeout_count = timeout_count + 1;

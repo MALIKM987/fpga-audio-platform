@@ -49,6 +49,7 @@ module fft_accelerator_core_tb;
     integer mid_gain_path_ok = 0;
     integer treble_gain_path_ok = 0;
     integer vector_fd = 0;
+    integer expected_fd = 0;
     integer output_fd = 0;
     integer scan_result = 0;
     integer csv_index = 0;
@@ -57,6 +58,7 @@ module fft_accelerator_core_tb;
     reg [DATA_WIDTH-1:0] read_value;
     reg [8*64-1:0] csv_header;
     reg signed [SAMPLE_WIDTH-1:0] input_samples [0:FFT_SIZE-1];
+    reg signed [SAMPLE_WIDTH-1:0] expected_samples [0:FFT_SIZE-1];
 
     fft_accelerator_core #(
         .FFT_SIZE(FFT_SIZE),
@@ -135,7 +137,7 @@ module fft_accelerator_core_tb;
         end
     endtask
 
-    function signed [SAMPLE_WIDTH-1:0] expected_output;
+    function signed [SAMPLE_WIDTH-1:0] expected_impulse0_output;
         input integer index;
         integer effective_bin;
         reg signed [GAIN_WIDTH-1:0] gain;
@@ -155,14 +157,26 @@ module fft_accelerator_core_tb;
                 gain = GAIN_0_75;
             end
 
-            product = input_samples[index] * gain;
-            expected_output = product >>> 14;
+            product = 16'sd1000 * gain;
+            expected_impulse0_output = product >>> 14;
+        end
+    endfunction
+
+    function signed [SAMPLE_WIDTH-1:0] expected_output;
+        input integer index;
+        begin
+            expected_output = expected_samples[index];
         end
     endfunction
 
     initial begin
         for (i = 0; i < FFT_SIZE; i = i + 1) begin
-            input_samples[i] = 16'sd1000;
+            input_samples[i] = 16'sd0;
+            expected_samples[i] = 16'sd0;
+        end
+        input_samples[0] = 16'sd1000;
+        for (i = 0; i < FFT_SIZE; i = i + 1) begin
+            expected_samples[i] = expected_impulse0_output(i);
         end
 
         vector_fd = $fopen("sim/vectors/mixed.csv", "r");
@@ -179,8 +193,30 @@ module fft_accelerator_core_tb;
             end
             $fclose(vector_fd);
             $display("INPUT_VECTOR=sim/vectors/mixed.csv");
+
+            expected_fd = $fopen(
+                "sim/vectors/mixed_expected_rtl_fft_passthrough_ifft.csv",
+                "r"
+            );
+            if (expected_fd != 0) begin
+                line_status = $fgets(csv_header, expected_fd);
+                for (i = 0; i < FFT_SIZE; i = i + 1) begin
+                    scan_result = $fscanf(expected_fd, "%d,%d\n", csv_index, csv_sample);
+                    if (scan_result == 2 && csv_index >= 0 && csv_index < FFT_SIZE) begin
+                        expected_samples[csv_index] = csv_sample;
+                    end else begin
+                        errors = errors + 1;
+                        $display("TEST expected_vector_read FAIL at row %0d", i);
+                    end
+                end
+                $fclose(expected_fd);
+                $display("EXPECTED_VECTOR=sim/vectors/mixed_expected_rtl_fft_passthrough_ifft.csv");
+            end else begin
+                errors = errors + 1;
+                $display("TEST expected_vector_open FAIL");
+            end
         end else begin
-            $display("INPUT_VECTOR=default_constant_1000");
+            $display("INPUT_VECTOR=default_impulse0_1000");
             $display("NOTE=sim/vectors/mixed.csv not found, using built-in fallback samples.");
         end
 
@@ -192,8 +228,8 @@ module fft_accelerator_core_tb;
         end
 
         $display("=== REGISTER CONTROLLED FFT ACCELERATOR DEMO ===");
-        $display("MODE=MODEL_PASSTHROUGH");
-        $display("NOTE=FFT and IFFT wrappers are currently passthrough models.");
+        $display("MODE=FFT_CORE_PLUS_PASSTHROUGH_IFFT");
+        $display("NOTE=FFT wrapper uses fft_radix2_core; IFFT wrapper is still passthrough.");
         $display("");
         $display("REGISTER MAP:");
         $display("0x0 CONTROL_REG");
@@ -279,7 +315,7 @@ module fft_accelerator_core_tb;
         sample_valid = 1'b0;
         sample_in = 16'sd0;
 
-        while (!pipeline_done_ok && timeout_count < 3000) begin
+        while (!pipeline_done_ok && timeout_count < 10000) begin
             @(posedge clk);
             #1;
             timeout_count = timeout_count + 1;
