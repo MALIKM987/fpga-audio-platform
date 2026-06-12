@@ -156,6 +156,24 @@ VERILOG_TESTS = [
             "tb/fft_ifft_pipeline_tb.v",
         ],
     },
+    {
+        "name": "tang_fft_ifft_selftest_top",
+        "sources": [
+            "rtl/dsp/fft_bit_reverse.v",
+            "rtl/dsp/fft_butterfly_addr_gen.v",
+            "rtl/dsp/fft_twiddle_rom.v",
+            "rtl/dsp/complex_mult.v",
+            "rtl/dsp/fft_radix2_core.v",
+            "rtl/dsp/fft_accel_wrapper.v",
+            "rtl/dsp/ifft_accel_wrapper.v",
+            "rtl/dsp/sample_block_buffer.v",
+            "rtl/dsp/spectral_gain_select.v",
+            "rtl/dsp/spectral_processor.v",
+            "rtl/dsp/fft_ifft_pipeline.v",
+            "rtl/top/tang_fft_ifft_selftest_top.v",
+            "tb/tang_fft_ifft_selftest_top_tb.v",
+        ],
+    },
 ]
 
 COMPARISON_TESTS = [
