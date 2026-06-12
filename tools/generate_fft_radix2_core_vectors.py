@@ -77,8 +77,28 @@ def main() -> int:
         status = "UPDATED" if changed else "UNCHANGED"
         print(f"VECTOR {name} {status} {output_path.relative_to(REPO_ROOT)}")
 
+        inverse_expected_real, inverse_expected_imag = fft_radix2_core_fixed_model(
+            real_in,
+            imag_in,
+            inverse=True,
+        )
+        inverse_vector_text = format_vector_lines(
+            real_in,
+            imag_in,
+            inverse_expected_real,
+            inverse_expected_imag,
+        )
+        inverse_output_path = OUTPUT_DIR / f"ifft_radix2_core_{name}.mem"
+        inverse_changed = write_if_changed(inverse_output_path, inverse_vector_text)
+        changed_count += 1 if inverse_changed else 0
+        inverse_status = "UPDATED" if inverse_changed else "UNCHANGED"
+        print(
+            f"VECTOR ifft_{name} {inverse_status} "
+            f"{inverse_output_path.relative_to(REPO_ROOT)}"
+        )
+
     print("")
-    print(f"generated_vectors: {len(TEST_CASES)}")
+    print(f"generated_vectors: {len(TEST_CASES) * 2}")
     print(f"changed_vectors: {changed_count}")
     print("STATUS=PASS")
     return 0

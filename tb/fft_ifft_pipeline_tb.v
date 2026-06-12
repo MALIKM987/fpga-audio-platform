@@ -34,11 +34,20 @@ module fft_ifft_pipeline_tb;
     integer done_ok = 0;
     integer output_count_ok = 0;
     integer output_order_ok = 1;
-    integer bass_gain_ok = 0;
-    integer mid_gain_ok = 0;
-    integer treble_gain_ok = 0;
+    integer sample_1_ok = 0;
+    integer sample_10_ok = 0;
+    integer sample_40_ok = 0;
     integer overflow_ok = 1;
     integer i;
+    integer vector_fd = 0;
+    integer expected_fd = 0;
+    integer scan_result = 0;
+    integer csv_index = 0;
+    integer csv_sample = 0;
+    integer line_status = 0;
+    reg [8*64-1:0] csv_header;
+    reg signed [SAMPLE_WIDTH-1:0] input_samples [0:FFT_SIZE-1];
+    reg signed [SAMPLE_WIDTH-1:0] expected_samples [0:FFT_SIZE-1];
 
     fft_ifft_pipeline #(
         .FFT_SIZE(FFT_SIZE),
@@ -80,29 +89,62 @@ module fft_ifft_pipeline_tb;
 
     function signed [SAMPLE_WIDTH-1:0] expected_output;
         input integer index;
-        integer effective_bin;
         begin
-            if (index <= FFT_SIZE / 2) begin
-                effective_bin = index;
-            end else begin
-                effective_bin = FFT_SIZE - index;
-            end
-
-            if (effective_bin <= 1) begin
-                expected_output = 16'sd1500;
-            end else if (effective_bin <= 21) begin
-                expected_output = 16'sd1000;
-            end else begin
-                expected_output = 16'sd750;
-            end
+            expected_output = expected_samples[index];
         end
     endfunction
 
     initial begin
+        for (i = 0; i < FFT_SIZE; i = i + 1) begin
+            input_samples[i] = 16'sd0;
+            expected_samples[i] = 16'sd0;
+        end
+
+        vector_fd = $fopen("sim/vectors/impulse.csv", "r");
+        if (vector_fd != 0) begin
+            line_status = $fgets(csv_header, vector_fd);
+            for (i = 0; i < FFT_SIZE; i = i + 1) begin
+                scan_result = $fscanf(vector_fd, "%d,%d\n", csv_index, csv_sample);
+                if (scan_result == 2 && csv_index >= 0 && csv_index < FFT_SIZE) begin
+                    input_samples[csv_index] = csv_sample;
+                end else begin
+                    errors = errors + 1;
+                    $display("TEST input_vector_read FAIL at row %0d", i);
+                end
+            end
+            $fclose(vector_fd);
+            $display("INPUT_VECTOR=sim/vectors/impulse.csv");
+
+            expected_fd = $fopen(
+                "sim/vectors/impulse_expected_rtl_fft_ifft_unnormalized.csv",
+                "r"
+            );
+            if (expected_fd != 0) begin
+                line_status = $fgets(csv_header, expected_fd);
+                for (i = 0; i < FFT_SIZE; i = i + 1) begin
+                    scan_result = $fscanf(expected_fd, "%d,%d\n", csv_index, csv_sample);
+                    if (scan_result == 2 && csv_index >= 0 && csv_index < FFT_SIZE) begin
+                        expected_samples[csv_index] = csv_sample;
+                    end else begin
+                        errors = errors + 1;
+                        $display("TEST expected_vector_read FAIL at row %0d", i);
+                    end
+                end
+                $fclose(expected_fd);
+                $display("EXPECTED_VECTOR=sim/vectors/impulse_expected_rtl_fft_ifft_unnormalized.csv");
+            end else begin
+                errors = errors + 1;
+                $display("TEST expected_vector_open FAIL");
+            end
+        end else begin
+            $display("INPUT_VECTOR=default_zero_frame");
+            $display("NOTE=sim/vectors/impulse.csv not found, using built-in zero frame.");
+        end
+
         $display("=== FFT/IFFT PIPELINE MODEL TEST ===");
         $display("FFT_SIZE=%0d", FFT_SIZE);
-        $display("MODE=FFT_CORE_PLUS_PASSTHROUGH_IFFT");
-        $display("NOTE=Input frame is impulse0, so FFT bins are constant before gain.");
+        $display("MODE=FFT_CORE_PLUS_UNNORMALIZED_IFFT");
+        $display("NOTE=IFFT output is not divided by FFT_SIZE in this stage.");
         $display("");
 
         repeat (3) @(posedge clk);
@@ -119,18 +161,14 @@ module fft_ifft_pipeline_tb;
         for (i = 0; i < FFT_SIZE; i = i + 1) begin
             @(negedge clk);
             sample_valid = 1'b1;
-            if (i == 0) begin
-                sample_in = 16'sd1000;
-            end else begin
-                sample_in = 16'sd0;
-            end
+            sample_in = input_samples[i];
         end
 
         @(negedge clk);
         sample_valid = 1'b0;
         sample_in = 16'sd0;
 
-        while (!done_ok && timeout_count < 10000) begin
+        while (!done_ok && timeout_count < 25000) begin
             @(posedge clk);
             #1;
             timeout_count = timeout_count + 1;
@@ -157,16 +195,16 @@ module fft_ifft_pipeline_tb;
                              output_count, sample_out, expected_output(output_count));
                 end
 
-                if ((out_index == 8'd1) && (sample_out === 16'sd1500)) begin
-                    bass_gain_ok = 1;
+                if ((out_index == 8'd1) && (sample_out === expected_output(1))) begin
+                    sample_1_ok = 1;
                 end
 
-                if ((out_index == 8'd10) && (sample_out === 16'sd1000)) begin
-                    mid_gain_ok = 1;
+                if ((out_index == 8'd10) && (sample_out === expected_output(10))) begin
+                    sample_10_ok = 1;
                 end
 
-                if ((out_index == 8'd40) && (sample_out === 16'sd750)) begin
-                    treble_gain_ok = 1;
+                if ((out_index == 8'd40) && (sample_out === expected_output(40))) begin
+                    sample_40_ok = 1;
                 end
 
                 output_count = output_count + 1;
@@ -183,9 +221,9 @@ module fft_ifft_pipeline_tb;
         report_result("pipeline_done", done_ok);
         report_result("output_count", output_count_ok);
         report_result("output_order", output_order_ok);
-        report_result("bass_gain_path", bass_gain_ok);
-        report_result("mid_gain_path", mid_gain_ok);
-        report_result("treble_gain_path", treble_gain_ok);
+        report_result("sample_1_match", sample_1_ok);
+        report_result("sample_10_match", sample_10_ok);
+        report_result("sample_40_match", sample_40_ok);
         report_result("overflow", overflow_ok);
 
         $display("");

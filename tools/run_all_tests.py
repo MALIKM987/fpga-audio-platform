@@ -130,6 +130,11 @@ VERILOG_TESTS = [
     {
         "name": "ifft_accel_wrapper",
         "sources": [
+            "rtl/dsp/fft_bit_reverse.v",
+            "rtl/dsp/fft_butterfly_addr_gen.v",
+            "rtl/dsp/fft_twiddle_rom.v",
+            "rtl/dsp/complex_mult.v",
+            "rtl/dsp/fft_radix2_core.v",
             "rtl/dsp/ifft_accel_wrapper.v",
             "tb/ifft_accel_wrapper_tb.v",
         ],

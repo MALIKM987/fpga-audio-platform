@@ -6,8 +6,9 @@ Celem jest przygotowanie własnego, sekwencyjnego rdzenia FFT/IFFT w RTL dla
 ramek 256 próbek. Rdzeń ma być zrozumiały, możliwy do wyjaśnienia na obronie i
 porównywalny z istniejącym modelem referencyjnym w Pythonie.
 
-Na tym etapie nie implementujemy jeszcze rdzenia RTL. Dokument opisuje decyzje
-architektoniczne, algorytm, format danych, strukturę sterowania i plan testów.
+Dokument opisuje decyzje architektoniczne, algorytm, format danych, strukturę
+sterowania i plan testów dla własnego rdzenia FFT/IFFT. Pierwsza wersja rdzenia
+RTL jest wdrażana etapami jako osobne, małe PR-y.
 
 ## 2. Dlaczego własna FFT/IFFT
 
@@ -25,9 +26,11 @@ Gowin FFT IP pozostaje możliwą późniejszą optymalizacją albo wariantem
 porównawczym. Nie jest jednak pierwszym wyborem implementacyjnym dla wersji
 edukacyjnej i obronieniowej.
 
-Obecne `fft_accel_wrapper.v` i `ifft_accel_wrapper.v` nadal są modelami
-passthrough. Sprawdzają interfejs, indeksy, `busy/done` i przepływ danych, ale
-nie wykonują jeszcze matematycznej FFT/IFFT.
+Obecne `fft_accel_wrapper.v` i `ifft_accel_wrapper.v` korzystają już ze
+wspólnego `fft_radix2_core.v`: wrapper FFT używa `inverse=0`, a wrapper IFFT
+używa `inverse=1`. IFFT nadal nie wykonuje normalizacji `1/N`, więc pełny tor
+FFT -> gain -> IFFT ma znane ograniczenie amplitudy i wymaga kolejnego etapu
+skalowania oraz walidacji end-to-end.
 
 ## 3. Wybór algorytmu
 
