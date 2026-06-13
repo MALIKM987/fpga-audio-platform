@@ -21,6 +21,10 @@ PYTHON_TESTS = [
         "name": "fft_radix2_fixed_model",
         "command": [sys.executable, "tools/test_fft_radix2_fixed_model.py"],
     },
+    {
+        "name": "spectrum_lab_model",
+        "command": [sys.executable, "tools/test_spectrum_lab_model.py"],
+    },
 ]
 
 VECTOR_TESTS = [

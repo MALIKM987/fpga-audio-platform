@@ -99,6 +99,12 @@ Top Tang Nano dla konsoli UART mini CPU -> FFT/IFFT opisano w:
 docs/tang_uart_cpu_fft_top.md
 ```
 
+PC Spectrum Lab App w trybie symulacyjnym opisano w:
+
+```text
+docs/pc_spectrum_lab_app.md
+```
+
 ## Planowana architektura FFT/IFFT
 
 Moduły nowego kierunku zaimplementowane w obecnym etapie:
@@ -129,6 +135,8 @@ Moduły nowego kierunku zaimplementowane w obecnym etapie:
   uruchomienia konsoli UART na Tang Nano 20K.
 - `tools/uart_fft_console_client.py` jako opcjonalny klient PC do wysłania
   pakietu `A5 01 5A` i dekodowania odpowiedzi.
+- `tools/spectrum_lab_model.py` i `tools/spectrum_lab_app.py` jako pierwszy
+  PC-side Spectrum Lab w trybie simulation-only.
 - `tools/fft_reference_model.py` jako Pythonowy golden model matematyczny
   toru FFT -> spectral gain -> IFFT.
 - GitHub Actions uruchamiające testy Verilog dla pull requestów i pushy na
@@ -140,6 +148,7 @@ Moduły nadal oznaczone jako TODO:
 - integracja Gowin FFT IP,
 - fizyczny I2S,
 - potwierdzone piny UART i osobny wariant constraints Gowin dla topu UART,
+- protokół UART dla pełnych ramek próbek i backend PC -> FPGA,
 - AXI-Lite,
 - UART bridge do banku rejestrów,
 - hardware PCM1808/PCM5102A.
