@@ -2,8 +2,8 @@
 
 ## Cel
 
-Ten etap zmienia kierunek integracji pełnych ramek UART tak, aby aplikacja PC
-nie sterowała bezpośrednio akceleratorem FFT/IFFT. Host może tylko:
+Ten etap utrzymuje zasadę, że aplikacja PC nie steruje bezpośrednio
+akceleratorem FFT/IFFT. Host może tylko:
 
 - wysłać próbki wejściowe,
 - wysłać nastawy gain,
@@ -51,38 +51,43 @@ A5 01 5A
 ```
 
 pozostaje bez zmian. Nadal jest obsługiwany przez `uart_cpu_fft_console` i
-istniejący program impulsowy mini CPU. Ten etap dodaje osobną ścieżkę dla
-pakietowego protokołu pełnych ramek i nie usuwa starszego testu.
+istniejący program impulsowy mini CPU. Ścieżka pełnych ramek UART jest osobna i
+nie usuwa starszego testu.
 
 ## Moduły
 
-Zmodyfikowany backend:
+Mailbox UART:
 
 ```text
 rtl/uart/uart_frame_buffer_backend.v
 ```
 
-Dodany system CPU:
+System CPU-owned frame flow:
 
 ```text
 rtl/cpu/mini_cpu_uart_frame_system.v
 ```
 
-Zaktualizowany ROM programu:
+ROM programu CPU:
 
 ```text
 rtl/cpu/mini_cpu_program_rom.v
 ```
 
-Nowy program ROM:
+Programy ROM związane z pełnymi ramkami UART:
 
 ```text
 MINI_CPU_PROGRAM_UART_FRAME_ONCE
+MINI_CPU_PROGRAM_UART_FRAME_SERVICE
 ```
 
-Program wykonuje jedną transakcję frame-processing i zatrzymuje CPU po
-zakończeniu. To celowo mały etap demonstracyjny, nie jeszcze stała usługa
-działająca w nieskończonej pętli.
+`MINI_CPU_PROGRAM_UART_FRAME_ONCE` zachowuje stary wariant demonstracyjny:
+wykonuje jedną transakcję i zatrzymuje CPU.
+
+`MINI_CPU_PROGRAM_UART_FRAME_SERVICE` jest domyślnym programem dla
+`mini_cpu_uart_frame_system`. Po sukcesie albo błędzie wraca do adresu
+oczekiwania na kolejne `RUN_FRAME`, dzięki czemu aplikacja PC może wysyłać wiele
+ramek bez resetowania systemu.
 
 ## Mapa mailboxa
 
@@ -118,13 +123,15 @@ Bajt statusu w mailboxie:
 | 3 | `ERROR` | Wykryto błąd komendy, payloadu albo FFT status error. |
 | 4 | `TIMEOUT` | Zarezerwowane dla przyszłego watchdog timeout. |
 
-W obecnym programie testowym CPU ustawia `CPU_BUSY` na początku i `DONE` po
-skopiowaniu wyników. Bit `TIMEOUT` jest zarezerwowany, ale nie ma jeszcze
-pełnego watchdog countera w programie mini CPU.
+CPU ustawia `CPU_BUSY` na początku i `INPUT_LOADED | DONE` po skopiowaniu
+wyników. Bit `TIMEOUT` jest zarezerwowany, ale nie ma jeszcze pełnego watchdog
+countera w programie mini CPU.
 
 ## Zachowanie komend UART
 
-`WRITE_FRAME_CHUNK` zapisuje próbki tylko do mailboxa.
+`WRITE_FRAME_CHUNK` zapisuje próbki tylko do mailboxa. Zapis poprawnego chunka
+ustawia status `INPUT_LOADED` i czyści stare `DONE`, więc kolejna ramka nie
+odziedziczy zakończenia poprzedniej transakcji.
 
 `SET_GAINS` zapisuje gainy tylko do mailboxa.
 
@@ -135,9 +142,9 @@ który jest widoczny dla mini CPU.
 statusu `DONE`. Przed `DONE` backend zwraca odpowiedź `ERROR`, ale nie próbuje
 samodzielnie obliczać ani kopiować wyników.
 
-## Sekwencja CPU
+## Pętla usługowa CPU
 
-Program `MINI_CPU_PROGRAM_UART_FRAME_ONCE` wykonuje:
+Program `MINI_CPU_PROGRAM_UART_FRAME_SERVICE` wykonuje cykl:
 
 1. Czeka na `FRAME_CONTROL.run_request`.
 2. Ustawia `FRAME_STATUS.CPU_BUSY`.
@@ -149,18 +156,22 @@ Program `MINI_CPU_PROGRAM_UART_FRAME_ONCE` wykonuje:
 8. Zapisuje `CONTROL.START`.
 9. Polluje `FFT_STATUS` do `DONE` albo `ERROR/OVERFLOW`.
 10. Kopiuje `FFT_OUTPUT_SAMPLE[0..255]` do `FRAME_RESULT_SAMPLE[0..255]`.
-11. Ustawia status `INPUT_LOADED | DONE`.
-12. Zapisuje `GPIO_RESULT=0x00A5` i zatrzymuje CPU.
+11. Ustawia status `INPUT_LOADED | DONE` albo `INPUT_LOADED | ERROR`.
+12. Zapisuje `GPIO_RESULT=0x00A5` przy sukcesie albo `0x00E1` przy błędzie.
+13. Wraca do kroku 1 bez resetu.
+
+To jest potrzebne dla aplikacji PC, która ma wykonywać kolejne próby i kolejne
+ramki bez ręcznego restartowania FPGA.
 
 ## Testy
 
-Dodany test:
+Test:
 
 ```text
 tb/cpu_owned_uart_frame_flow_tb.v
 ```
 
-Test sprawdza:
+sprawdza teraz:
 
 - zapis gainów przez UART backend,
 - zapis impulsowej ramki wejściowej chunkami po 32 próbki,
@@ -172,16 +183,20 @@ Test sprawdza:
 - zakończenie FFT/IFFT,
 - zapis wyniku przez CPU do `FRAME_RESULT_SAMPLE`,
 - odczyt wybranych próbek przez UART backend,
-- brak `ERROR/TIMEOUT` dla poprawnej ramki.
+- brak `ERROR/TIMEOUT` dla poprawnej ramki,
+- brak `HALT` po pierwszej ramce,
+- drugą transakcję bez resetu,
+- skasowanie starego `DONE` po uploadzie następnej ramki,
+- niezależny wynik drugiej ramki.
 
-Istniejący test:
+Top-level test:
 
 ```text
-tb/uart_frame_buffer_backend_tb.v
+tb/tang_cpu_owned_frame_uart_top_tb.v
 ```
 
-został zaktualizowany tak, aby sprawdzał mailbox CPU, a nie dawny lokalny
-loopback.
+nadal sprawdza bitowy UART, packet RX/TX, mailbox, mini CPU, MMIO FFT/IFFT i
+odczyt wybranych wyników.
 
 Pełna regresja:
 
@@ -199,18 +214,13 @@ Ten etap nadal nie dodaje:
 - I2S,
 - AXI-Lite,
 - Gowin FFT IP,
-- stałego programu CPU działającego jako wielotransakcyjna usługa.
+- sprzętowej walidacji UART na Tang Nano.
 
-Program CPU jest na razie jednorazowym flow do symulacji i weryfikacji
-własności architektury.
+## Następne branche
 
-## Następny branch
-
-Rekomendowany następny etap:
+Rekomendowane następne etapy:
 
 ```text
-codex/pc-app-uart-fpga-backend
+codex/pc-fpga-result-comparison-plots
+codex/tang-uart-pin-confirmation
 ```
-
-Ten branch może połączyć aplikację PC z nowym pakietowym backendem FPGA bez
-zmiany zasady, że akceleratorem steruje wyłącznie mini CPU.
