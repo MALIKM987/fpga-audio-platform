@@ -74,13 +74,14 @@ module uart_cpu_fft_console_e2e_tb;
 
     task send_uart_byte;
         input [7:0] byte_value;
+        integer bit_index;
         begin
             @(negedge clk);
             uart_rx_line = 1'b0;
             repeat (CLKS_PER_BIT) @(posedge clk);
 
-            for (i = 0; i < 8; i = i + 1) begin
-                uart_rx_line = byte_value[i];
+            for (bit_index = 0; bit_index < 8; bit_index = bit_index + 1) begin
+                uart_rx_line = byte_value[bit_index];
                 repeat (CLKS_PER_BIT) @(posedge clk);
             end
 
@@ -100,9 +101,18 @@ module uart_cpu_fft_console_e2e_tb;
     task receive_uart_byte;
         output [7:0] byte_value;
         output stop_value;
+        integer bit_index;
         begin
             wait_guard = 0;
-            while (uart_tx_line == 1'b1 && wait_guard < 5000) begin
+            byte_value = 8'h00;
+            stop_value = 1'b0;
+
+            while (uart_tx_line !== 1'b1 && wait_guard < 5000) begin
+                @(posedge clk);
+                wait_guard = wait_guard + 1;
+            end
+
+            while (uart_tx_line === 1'b1 && wait_guard < 5000) begin
                 @(posedge clk);
                 wait_guard = wait_guard + 1;
             end
@@ -111,15 +121,22 @@ module uart_cpu_fft_console_e2e_tb;
                 byte_value = 8'h00;
                 stop_value = 1'b0;
             end else begin
-                repeat (CLKS_PER_BIT + (CLKS_PER_BIT / 2)) @(posedge clk);
+                repeat (CLKS_PER_BIT / 2) @(posedge clk);
 
-                for (i = 0; i < 8; i = i + 1) begin
-                    byte_value[i] = uart_tx_line;
+                if (uart_tx_line !== 1'b0) begin
+                    byte_value = 8'h00;
+                    stop_value = 1'b0;
+                end else begin
                     repeat (CLKS_PER_BIT) @(posedge clk);
-                end
 
-                stop_value = uart_tx_line;
-                repeat (CLKS_PER_BIT) @(posedge clk);
+                    for (bit_index = 0; bit_index < 8; bit_index = bit_index + 1) begin
+                        byte_value[bit_index] = uart_tx_line;
+                        repeat (CLKS_PER_BIT) @(posedge clk);
+                    end
+
+                    stop_value = uart_tx_line;
+                    @(posedge clk);
+                end
             end
         end
     endtask
