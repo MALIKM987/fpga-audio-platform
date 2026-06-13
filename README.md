@@ -69,6 +69,12 @@ Minimalny top do sprzętowego self-testu realnego pipeline FFT/IFFT opisano w:
 docs/tang_fft_ifft_selftest_top.md
 ```
 
+CPU-facing MMIO wrapper i testy warstwowe opisano w:
+
+```text
+docs/fft_accelerator_mmio.md
+```
+
 ## Planowana architektura FFT/IFFT
 
 Moduły nowego kierunku zaimplementowane w obecnym etapie:
@@ -83,6 +89,10 @@ Moduły nowego kierunku zaimplementowane w obecnym etapie:
 - `rtl/control/fft_control_regs.v` jako bank rejestrów CONTROL/STATUS/PARAM.
 - `rtl/control/fft_accelerator_core.v` jako moduł nadrzędny akceleratora
   sterowany rejestrami.
+- `rtl/control/fft_mmio_regs.v` jako warstwa rejestrów i pamięci próbek dla
+  prostego interfejsu CPU-facing MMIO.
+- `rtl/control/fft_accelerator_mmio.v` jako wrapper MMIO sterujący
+  `fft_ifft_pipeline` bez dodawania jeszcze CPU, UART ani AXI-Lite.
 - `tools/run_all_tests.py` jako podstawowy runner testów Verilog.
 - `tools/fft_reference_model.py` jako Pythonowy golden model matematyczny
   toru FFT -> spectral gain -> IFFT.
@@ -107,7 +117,10 @@ arytmetyczne przesunięcie o 8 bitów. `fft_control_regs` dodaje prosty interfej
 rejestrowy CONTROL/STATUS/PARAM podobny metodologicznie do AXI-Lite, ale
 niezależny od konkretnej magistrali. `fft_accelerator_core` łączy ten bank
 rejestrów z pipeline, tak że zapis bitu START w CONTROL uruchamia
-przetwarzanie, a STATUS pokazuje busy/done/overflow/error.
+przetwarzanie, a STATUS pokazuje busy/done/overflow/error. Nowszy
+`fft_accelerator_mmio` dodaje pamięć wejściową i wyjściową widoczną przez MMIO,
+żeby testbench mógł zachowywać się jak prosty CPU zapisujący ramkę, startujący
+akcelerator i odczytujący wybrane wyniki.
 
 ## Aktywny self-test
 
