@@ -19,11 +19,17 @@ except ImportError as exc:  # pragma: no cover - depends on local Python build.
 from spectrum_lab_model import (
     DEFAULT_FRAME_SIZE,
     DEFAULT_SAMPLE_RATE_HZ,
+    INT16_MAX,
+    Int16Frame,
     SignalComponent,
     SpectrumModification,
     SpectrumLabResult,
+    dft,
+    fft_magnitude,
     simulate_spectrum_lab,
 )
+from spectrum_lab_hardware_backend import Gains, run_frame
+from uart_transport import MockFpgaTransport, SerialTransport
 
 
 class PlotCanvas(tk.Canvas):
@@ -119,9 +125,10 @@ class SpectrumLabApp(tk.Tk):
 
         self.sample_rate_var = tk.StringVar(value=str(int(DEFAULT_SAMPLE_RATE_HZ)))
         self.frame_size_var = tk.StringVar(value=str(DEFAULT_FRAME_SIZE))
-        self.status_var = tk.StringVar(
-            value="UART hardware backend not implemented in this branch."
-        )
+        self.backend_mode_var = tk.StringVar(value="Local simulation")
+        self.serial_port_var = tk.StringVar(value="COM5")
+        self.baud_var = tk.StringVar(value="115200")
+        self.status_var = tk.StringVar(value="Ready. Backend: Local simulation.")
 
         self._build_layout()
         self._load_default_values()
@@ -151,6 +158,31 @@ class SpectrumLabApp(tk.Tk):
         ttk.Button(settings, text="Export samples", command=self.export_samples).pack(
             side="left",
             padx=4,
+        )
+
+        backend_settings = ttk.Frame(root)
+        backend_settings.pack(fill="x", pady=(8, 0))
+        ttk.Label(backend_settings, text="Backend").pack(side="left")
+        ttk.Combobox(
+            backend_settings,
+            textvariable=self.backend_mode_var,
+            width=22,
+            state="readonly",
+            values=[
+                "Local simulation",
+                "Mock FPGA backend",
+                "Serial FPGA backend",
+            ],
+        ).pack(side="left", padx=(4, 16))
+        ttk.Label(backend_settings, text="Port").pack(side="left")
+        ttk.Entry(backend_settings, textvariable=self.serial_port_var, width=12).pack(
+            side="left",
+            padx=(4, 16),
+        )
+        ttk.Label(backend_settings, text="Baud").pack(side="left")
+        ttk.Entry(backend_settings, textvariable=self.baud_var, width=8).pack(
+            side="left",
+            padx=(4, 0),
         )
 
         editors = ttk.PanedWindow(root, orient="horizontal")
@@ -223,17 +255,98 @@ class SpectrumLabApp(tk.Tk):
             raise ValueError("sample rate must be positive")
         return sample_rate, frame_size
 
+    def _gain_to_q2_14(self, gain: float) -> int:
+        value = int(round(float(gain) * 16384.0))
+        return max(-32768, min(32767, value))
+
+    def _hardware_gains(self, modifications: list[SpectrumModification]) -> Gains:
+        bass = 16384
+        mid = 16384
+        treble = 16384
+
+        for modification in modifications:
+            gain = self._gain_to_q2_14(modification.gain)
+            center = modification.center_frequency_hz
+            if center <= 187.5:
+                bass = gain
+            elif center <= 3937.5:
+                mid = gain
+            else:
+                treble = gain
+
+        return Gains(bass, mid, treble)
+
+    def _with_backend_output(
+        self,
+        local_result: SpectrumLabResult,
+        output_samples: list[int],
+    ) -> SpectrumLabResult:
+        output_signal = [sample / float(INT16_MAX) for sample in output_samples]
+        output_spectrum = dft(output_signal, len(output_signal))
+        return SpectrumLabResult(
+            input_signal=local_result.input_signal,
+            input_int16=local_result.input_int16,
+            input_spectrum=local_result.input_spectrum,
+            input_magnitude=local_result.input_magnitude,
+            gain_mask=local_result.gain_mask,
+            output_spectrum=output_spectrum,
+            output_signal=output_signal,
+            output_int16=Int16Frame(
+                samples=list(output_samples),
+                clipped=False,
+                max_abs_before_clip=max(abs(value) for value in output_samples)
+                if output_samples
+                else 0.0,
+            ),
+            output_magnitude=fft_magnitude(output_spectrum),
+        )
+
     def simulate(self) -> None:
         try:
             sample_rate, frame_size = self._settings()
             components = parse_components(self.component_text.get("1.0", "end"))
             modifications = parse_modifications(self.modification_text.get("1.0", "end"))
-            self.result = simulate_spectrum_lab(
+            local_result = simulate_spectrum_lab(
                 components,
                 modifications,
                 sample_rate_hz=sample_rate,
                 frame_size=frame_size,
             )
+            backend_mode = self.backend_mode_var.get()
+
+            if backend_mode == "Local simulation":
+                self.result = local_result
+                backend_note = "local simulation"
+            else:
+                if frame_size != DEFAULT_FRAME_SIZE:
+                    raise ValueError("UART FPGA backend requires a 256-sample frame")
+
+                gains = self._hardware_gains(modifications)
+                if backend_mode == "Mock FPGA backend":
+                    transport = MockFpgaTransport()
+                    backend_note = "mock FPGA loopback backend"
+                else:
+                    port = self.serial_port_var.get().strip()
+                    baud = int(self.baud_var.get())
+                    if not port:
+                        raise ValueError("serial backend requires a COM/TTY port")
+                    transport = SerialTransport(port, baudrate=baud, timeout_s=5.0)
+                    backend_note = f"serial FPGA backend on {port}"
+
+                try:
+                    hardware_result = run_frame(
+                        local_result.input_int16.samples,
+                        gains,
+                        transport,
+                        timeout_s=5.0,
+                    )
+                finally:
+                    transport.close()
+
+                self.result = self._with_backend_output(
+                    local_result,
+                    hardware_result.samples,
+                )
         except Exception as exc:  # pragma: no cover - GUI feedback path.
             messagebox.showerror("Simulation error", str(exc))
             return
@@ -256,7 +369,7 @@ class SpectrumLabApp(tk.Tk):
         self.status_var.set(
             f"samples={frame_size}; input_max={input_max:.4f}; "
             f"output_max={output_max:.4f}; {warning_text}; "
-            "UART hardware backend not implemented in this branch."
+            f"backend={backend_note}"
         )
 
     def clear(self) -> None:
@@ -270,7 +383,7 @@ class SpectrumLabApp(tk.Tk):
             self.output_spectrum_plot,
         ]:
             plot.redraw([])
-        self.status_var.set("UART hardware backend not implemented in this branch.")
+        self.status_var.set("Ready. Backend: Local simulation.")
 
     def export_samples(self) -> None:
         if self.result is None:
@@ -298,7 +411,7 @@ class SpectrumLabApp(tk.Tk):
                 writer.writerow([index, input_value, input_i16, output_value, output_i16])
 
         self.status_var.set(
-            f"exported={path}; UART hardware backend not implemented in this branch."
+            f"exported={path}; backend={self.backend_mode_var.get()}"
         )
 
 

@@ -129,6 +129,12 @@ CPU-owned flow dla pełnych ramek UART opisano w:
 docs/cpu_owned_uart_frame_flow.md
 ```
 
+PC-side backend aplikacji Spectrum Lab dla tego protokołu opisano w:
+
+```text
+docs/pc_app_uart_fpga_backend.md
+```
+
 ## Planowana architektura FFT/IFFT
 
 Moduły nowego kierunku zaimplementowane w obecnym etapie:
@@ -172,6 +178,10 @@ Moduły nowego kierunku zaimplementowane w obecnym etapie:
 - `rtl/cpu/mini_cpu_uart_frame_system.v` jako symulacyjny system, w którym mini
   CPU czyta mailbox UART, kopiuje ramkę do `fft_accelerator_mmio`, startuje
   FFT/IFFT, polluje status i zapisuje wynik z powrotem do mailboxa.
+- `tools/spectrum_lab_hardware_backend.py`, `tools/uart_transport.py` i
+  `tools/spectrum_lab_uart_client.py` jako PC-side backend aplikacji Spectrum Lab
+  dla protokołu pełnych ramek UART; mock działa bez pyserial, a serial backend
+  jest opcjonalny.
 - `tools/fft_reference_model.py` jako Pythonowy golden model matematyczny
   toru FFT -> spectral gain -> IFFT.
 - GitHub Actions uruchamiające testy Verilog dla pull requestów i pushy na
