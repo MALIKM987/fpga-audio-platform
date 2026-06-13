@@ -135,6 +135,12 @@ PC-side backend aplikacji Spectrum Lab dla tego protokołu opisano w:
 docs/pc_app_uart_fpga_backend.md
 ```
 
+Top Tang Nano dla CPU-owned pełnych ramek UART opisano w:
+
+```text
+docs/tang_cpu_owned_frame_uart_top.md
+```
+
 ## Planowana architektura FFT/IFFT
 
 Moduły nowego kierunku zaimplementowane w obecnym etapie:
@@ -178,6 +184,9 @@ Moduły nowego kierunku zaimplementowane w obecnym etapie:
 - `rtl/cpu/mini_cpu_uart_frame_system.v` jako symulacyjny system, w którym mini
   CPU czyta mailbox UART, kopiuje ramkę do `fft_accelerator_mmio`, startuje
   FFT/IFFT, polluje status i zapisuje wynik z powrotem do mailboxa.
+- `rtl/top/tang_cpu_owned_frame_uart_top.v` jako top integrujący bitowy UART,
+  parser/formatter ramek, mailbox UART i `mini_cpu_uart_frame_system` bez
+  zgadywania pinów UART w constraints.
 - `tools/spectrum_lab_hardware_backend.py`, `tools/uart_transport.py` i
   `tools/spectrum_lab_uart_client.py` jako PC-side backend aplikacji Spectrum Lab
   dla protokołu pełnych ramek UART; mock działa bez pyserial, a serial backend
