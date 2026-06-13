@@ -105,6 +105,12 @@ PC Spectrum Lab App w trybie symulacyjnym opisano w:
 docs/pc_spectrum_lab_app.md
 ```
 
+Protokół UART dla przyszłego transferu pełnych ramek próbek opisano w:
+
+```text
+docs/uart_frame_protocol.md
+```
+
 ## Planowana architektura FFT/IFFT
 
 Moduły nowego kierunku zaimplementowane w obecnym etapie:
@@ -137,6 +143,8 @@ Moduły nowego kierunku zaimplementowane w obecnym etapie:
   pakietu `A5 01 5A` i dekodowania odpowiedzi.
 - `tools/spectrum_lab_model.py` i `tools/spectrum_lab_app.py` jako pierwszy
   PC-side Spectrum Lab w trybie simulation-only.
+- `tools/uart_frame_protocol.py` jako helpery pakietów UART z jawną długością,
+  checksumą i chunkami 256-próbkowej ramki.
 - `tools/fft_reference_model.py` jako Pythonowy golden model matematyczny
   toru FFT -> spectral gain -> IFFT.
 - GitHub Actions uruchamiające testy Verilog dla pull requestów i pushy na
@@ -148,7 +156,7 @@ Moduły nadal oznaczone jako TODO:
 - integracja Gowin FFT IP,
 - fizyczny I2S,
 - potwierdzone piny UART i osobny wariant constraints Gowin dla topu UART,
-- protokół UART dla pełnych ramek próbek i backend PC -> FPGA,
+- parser RTL protokołu pełnych ramek i backend PC -> FPGA,
 - AXI-Lite,
 - UART bridge do banku rejestrów,
 - hardware PCM1808/PCM5102A.

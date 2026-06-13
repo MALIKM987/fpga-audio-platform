@@ -158,6 +158,10 @@ Bez GUI można uruchomić demonstrację:
 python tools/spectrum_lab_demo.py
 ```
 
+Demo przygotowuje też lokalnie pakiety `WRITE_FRAME_CHUNK` dla wygenerowanej
+ramki signed int16 i wypisuje, ile chunków zostałoby wysłanych. Pakiety nie są
+jeszcze wysyłane do FPGA.
+
 Opcjonalny eksport CSV:
 
 ```text

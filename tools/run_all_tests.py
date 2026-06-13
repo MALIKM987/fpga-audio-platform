@@ -25,6 +25,10 @@ PYTHON_TESTS = [
         "name": "spectrum_lab_model",
         "command": [sys.executable, "tools/test_spectrum_lab_model.py"],
     },
+    {
+        "name": "uart_frame_protocol",
+        "command": [sys.executable, "tools/test_uart_frame_protocol.py"],
+    },
 ]
 
 VECTOR_TESTS = [

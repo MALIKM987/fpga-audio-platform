@@ -15,6 +15,7 @@ from spectrum_lab_model import (
     SpectrumModification,
     simulate_spectrum_lab,
 )
+from uart_frame_protocol import MAX_CHUNK_SAMPLES, build_write_frame_chunks
 
 
 def parse_args() -> argparse.Namespace:
@@ -50,6 +51,7 @@ def main() -> int:
         SpectrumModification(center_frequency_hz=2_700.0, bandwidth_hz=500.0, gain=0.5),
     ]
     result = simulate_spectrum_lab(components, modifications)
+    uart_chunks = build_write_frame_chunks(result.input_int16.samples)
 
     print("=== PC SPECTRUM LAB DEMO ===")
     print(f"sample_rate_hz={DEFAULT_SAMPLE_RATE_HZ:g}")
@@ -60,6 +62,9 @@ def main() -> int:
     print(f"output_max_abs={max(abs(value) for value in result.output_signal):.6f}")
     print(f"input_int16_clipped={int(result.input_int16.clipped)}")
     print(f"output_int16_clipped={int(result.output_int16.clipped)}")
+    print(f"uart_frame_protocol_chunks={len(uart_chunks)}")
+    print(f"uart_frame_protocol_chunk_samples={MAX_CHUNK_SAMPLES}")
+    print("uart_frame_protocol_status=packets prepared, not sent")
     print("hardware_backend=UART hardware backend not implemented in this branch")
 
     if args.csv is not None:
