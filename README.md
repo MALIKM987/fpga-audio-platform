@@ -141,6 +141,12 @@ Top Tang Nano dla CPU-owned pełnych ramek UART opisano w:
 docs/tang_cpu_owned_frame_uart_top.md
 ```
 
+Procedura potwierdzenia pinów UART dla fizycznego testu Tang Nano jest w:
+
+```text
+docs/tang_uart_pin_confirmation.md
+```
+
 ## Planowana architektura FFT/IFFT
 
 Moduły nowego kierunku zaimplementowane w obecnym etapie:
