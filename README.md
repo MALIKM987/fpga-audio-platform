@@ -111,6 +111,12 @@ Protokół UART dla przyszłego transferu pełnych ramek próbek opisano w:
 docs/uart_frame_protocol.md
 ```
 
+Samodzielny parser/formatter RTL dla tego protokołu opisano w:
+
+```text
+docs/uart_frame_protocol_rtl.md
+```
+
 ## Planowana architektura FFT/IFFT
 
 Moduły nowego kierunku zaimplementowane w obecnym etapie:
@@ -145,6 +151,9 @@ Moduły nowego kierunku zaimplementowane w obecnym etapie:
   PC-side Spectrum Lab w trybie simulation-only.
 - `tools/uart_frame_protocol.py` jako helpery pakietów UART z jawną długością,
   checksumą i chunkami 256-próbkowej ramki.
+- `rtl/uart/uart_frame_packet_rx.v`, `rtl/uart/uart_frame_packet_tx.v` i
+  `rtl/uart/uart_frame_mock_backend.v` jako samodzielny model RTL protokołu
+  pakietów UART, jeszcze bez integracji z FFT/IFFT.
 - `tools/fft_reference_model.py` jako Pythonowy golden model matematyczny
   toru FFT -> spectral gain -> IFFT.
 - GitHub Actions uruchamiające testy Verilog dla pull requestów i pushy na
