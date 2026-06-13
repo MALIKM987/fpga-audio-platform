@@ -87,6 +87,12 @@ Integracje mini CPU z akceleratorem FFT/IFFT MMIO opisano w:
 docs/mini_cpu_fft_integration.md
 ```
 
+Konsolę UART dla mini CPU i akceleratora FFT/IFFT opisano w:
+
+```text
+docs/uart_cpu_fft_console.md
+```
+
 ## Planowana architektura FFT/IFFT
 
 Moduły nowego kierunku zaimplementowane w obecnym etapie:
@@ -110,6 +116,8 @@ Moduły nowego kierunku zaimplementowane w obecnym etapie:
   sterowania rejestrami MMIO akceleratora.
 - `rtl/cpu/mini_cpu_fft_system.v` jako symulacyjna integracja mini CPU z
   `fft_accelerator_mmio`, ramka impulsowa, polling STATUS i GPIO PASS/FAIL.
+- `rtl/uart/uart_rx.v` i `rtl/uart/uart_cpu_fft_console.v` jako binarna konsola
+  UART uruchamiająca program impulsowy CPU i zwracająca wynik przez `uart_tx`.
 - `tools/run_all_tests.py` jako podstawowy runner testów Verilog.
 - `tools/fft_reference_model.py` jako Pythonowy golden model matematyczny
   toru FFT -> spectral gain -> IFFT.
@@ -124,7 +132,6 @@ Moduły nadal oznaczone jako TODO:
 - UART/self-test dla nowego pipeline,
 - AXI-Lite,
 - UART bridge do banku rejestrów,
-- UART/console bridge dla zintegrowanego mini CPU i akceleratora,
 - hardware PCM1808/PCM5102A.
 
 `sample_block_buffer` zbiera ramkę próbek, a `spectral_gain_select` i
@@ -239,6 +246,8 @@ Zaimplementowane:
   niezalezna infrastruktura prostego CPU do przyszlego sterowania MMIO.
 - `mini_cpu_fft_system` jako symulacyjny system CPU -> FFT/IFFT MMIO z
   programem impulsowym i GPIO PASS/FAIL.
+- `uart_rx` i `uart_cpu_fft_console` jako symulacyjna konsola UART z binarną
+  komendą RUN i odpowiedzią PASS/DONE/próbki wyjściowe.
 - `tools/run_all_tests.py` jako runner podstawowych testbenchy Verilog.
 - GitHub Actions jako automatyczne uruchamianie testów Verilog na GitHubie.
 
@@ -252,7 +261,7 @@ Niezaimplementowane jeszcze:
 - AXI-Lite.
 - UART bridge do banku rejestrów.
 - Fizyczny I2S dla nowego pipeline.
-- UART/self-test zintegrowany z nowym pipeline.
+- Top Tang Nano i constraints dla nowej konsoli UART.
 - Hardware PCM1808/PCM5102A w ścieżce FFT/IFFT.
 - Overlap-add.
 
@@ -574,7 +583,7 @@ pull requestów do `fpga-only-fft-console`.
 
 - Uruchomic lokalnie synteze i Place & Route w Gowin EDA.
 - Spisac zasoby LUT/FF/B-SRAM/DSP oraz timing/Fmax z raportow Gowin.
-- Dodac UART/self-test dla nowego pipeline.
+- Dodac top Tang Nano i constraints dla konsoli UART nowego pipeline.
 - Utrzymywac raport konsolowy PASS/FAIL dla kazdego nowego modulu.
 - Dopiero po stabilnym pipeline FFT/IFFT wrocic do warstwy PCM1808/PCM5102A.
 
