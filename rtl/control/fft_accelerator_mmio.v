@@ -30,7 +30,6 @@ module fft_accelerator_mmio #(
     reg [1:0] state = STATE_IDLE;
     reg [INDEX_WIDTH-1:0] feed_index = {INDEX_WIDTH{1'b0}};
     reg start_rejected_pulse = 1'b0;
-    reg pipeline_sample_valid = 1'b0;
     reg pipeline_start_request = 1'b0;
 
     wire start_pulse;
@@ -42,6 +41,7 @@ module fft_accelerator_mmio #(
     wire signed [SAMPLE_WIDTH-1:0] input_sample_read_data;
 
     wire pipeline_rst;
+    wire pipeline_sample_valid;
     wire pipeline_out_valid;
     wire [INDEX_WIDTH-1:0] pipeline_out_index;
     wire signed [SAMPLE_WIDTH-1:0] pipeline_sample_out;
@@ -56,6 +56,7 @@ module fft_accelerator_mmio #(
     assign done = pipeline_done;
     assign overflow = pipeline_overflow;
     assign error = start_rejected_pulse;
+    assign pipeline_sample_valid = (state == STATE_FEED);
 
     fft_mmio_regs #(
         .FFT_SIZE(FFT_SIZE),
@@ -118,11 +119,9 @@ module fft_accelerator_mmio #(
             state <= STATE_IDLE;
             feed_index <= {INDEX_WIDTH{1'b0}};
             start_rejected_pulse <= 1'b0;
-            pipeline_sample_valid <= 1'b0;
             pipeline_start_request <= 1'b0;
         end else begin
             start_rejected_pulse <= 1'b0;
-            pipeline_sample_valid <= 1'b0;
 
             if (clear_pulse) begin
                 state <= STATE_IDLE;
@@ -146,7 +145,6 @@ module fft_accelerator_mmio #(
 
                     STATE_FEED: begin
                         pipeline_start_request <= 1'b1;
-                        pipeline_sample_valid <= 1'b1;
 
                         if (start_pulse) begin
                             start_rejected_pulse <= 1'b1;
