@@ -78,6 +78,18 @@ Obecne zachowanie mocka jest deterministyczne i proste: po `RUN_FRAME` wynik
 jest kopią wejściowej ramki. To jest celowy loopback na poziomie protokołu,
 nie model matematyczny FFT/IFFT i nie zamiennik symulacji RTL.
 
+W GUI Spectrum Lab mock jest używany jako backend porównawczy. Aplikacja liczy
+lokalny wynik symulacji i zestawia go z wynikiem mocka, pokazując wykres
+różnicy oraz metryki:
+
+- `max abs error`,
+- `mean abs error`,
+- `RMS error`.
+
+Jeżeli lokalna symulacja zmienia widmo, a mock zwraca loopback wejścia,
+niezerowa różnica względem lokalnego wyniku jest oczekiwana. To potwierdza
+ścieżkę transferu i prezentacji danych, ale nie dowodzi zgodności obliczeń FPGA.
+
 Mock sprawdza, że aplikacja potrafi:
 
 - wysłać gainy,
@@ -146,8 +158,10 @@ flagi statusu i wybrane próbki wyjściowe.
 - `Serial FPGA backend` - wysłanie próbek przez realny port UART, opcjonalne
   i zależne od pyserial oraz potwierdzonych pinów sprzętowych.
 
-Tryb lokalny pozostaje domyślny. CI i testy nie wymagają tkinter, pyserial ani
-fizycznego sprzętu.
+Tryb lokalny pozostaje domyślny. Aplikacja zawsze pokazuje lokalny wynik,
+wynik mock backendu, opcjonalny wynik serial backendu oraz różnice względem
+lokalnej symulacji. CI i testy nie wymagają tkinter, pyserial ani fizycznego
+sprzętu.
 
 ## Testy
 
@@ -155,6 +169,7 @@ Nowy test:
 
 ```powershell
 python tools/test_spectrum_lab_hardware_backend.py
+python tools/test_spectrum_lab_comparison.py
 ```
 
 Pełny zestaw:
@@ -174,6 +189,8 @@ Testy sprawdzają:
 - payload z bajtami `A5` i `5A`,
 - brak wymogu pyserial,
 - brak regresji lokalnego modelu Spectrum Lab.
+- metryki porównania lokalnego wyniku z wynikiem backendu,
+- ścieżkę mock backend jako źródło danych do porównania.
 
 ## Ograniczenia
 

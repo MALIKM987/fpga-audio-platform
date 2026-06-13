@@ -20,13 +20,15 @@ from spectrum_lab_model import (
     DEFAULT_FRAME_SIZE,
     DEFAULT_SAMPLE_RATE_HZ,
     INT16_MAX,
-    Int16Frame,
     SignalComponent,
     SpectrumModification,
     SpectrumLabResult,
-    dft,
-    fft_magnitude,
     simulate_spectrum_lab,
+)
+from spectrum_lab_comparison import (
+    FrameComparison,
+    build_frame_comparison,
+    format_error_metrics,
 )
 from spectrum_lab_hardware_backend import Gains, run_frame
 from uart_transport import MockFpgaTransport, SerialTransport
@@ -120,8 +122,10 @@ class SpectrumLabApp(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
         self.title("FPGA Audio Platform - PC Spectrum Lab")
-        self.geometry("1040x760")
+        self.geometry("1120x860")
         self.result: SpectrumLabResult | None = None
+        self.mock_comparison: FrameComparison | None = None
+        self.serial_comparison: FrameComparison | None = None
 
         self.sample_rate_var = tk.StringVar(value=str(int(DEFAULT_SAMPLE_RATE_HZ)))
         self.frame_size_var = tk.StringVar(value=str(DEFAULT_FRAME_SIZE))
@@ -208,15 +212,19 @@ class SpectrumLabApp(tk.Tk):
         plot_grid.pack(fill="both", expand=True)
 
         self.input_time_plot = PlotCanvas(plot_grid, "Input signal")
-        self.input_spectrum_plot = PlotCanvas(plot_grid, "Input spectrum")
-        self.output_time_plot = PlotCanvas(plot_grid, "Output signal")
-        self.output_spectrum_plot = PlotCanvas(plot_grid, "Output spectrum")
+        self.local_output_plot = PlotCanvas(plot_grid, "Local simulation output")
+        self.mock_output_plot = PlotCanvas(plot_grid, "Mock FPGA backend")
+        self.serial_output_plot = PlotCanvas(plot_grid, "Serial FPGA backend")
+        self.mock_diff_plot = PlotCanvas(plot_grid, "Mock - local difference")
+        self.serial_diff_plot = PlotCanvas(plot_grid, "Serial - local difference")
 
         plots = [
             self.input_time_plot,
-            self.input_spectrum_plot,
-            self.output_time_plot,
-            self.output_spectrum_plot,
+            self.local_output_plot,
+            self.mock_output_plot,
+            self.serial_output_plot,
+            self.mock_diff_plot,
+            self.serial_diff_plot,
         ]
         for index, plot in enumerate(plots):
             row = index // 2
@@ -227,6 +235,7 @@ class SpectrumLabApp(tk.Tk):
         plot_grid.columnconfigure(1, weight=1)
         plot_grid.rowconfigure(0, weight=1)
         plot_grid.rowconfigure(1, weight=1)
+        plot_grid.rowconfigure(2, weight=1)
 
         status = ttk.LabelFrame(root, text="Status / log")
         status.pack(fill="x", pady=(10, 0))
@@ -276,29 +285,25 @@ class SpectrumLabApp(tk.Tk):
 
         return Gains(bass, mid, treble)
 
-    def _with_backend_output(
+    def _run_backend_comparison(
         self,
         local_result: SpectrumLabResult,
-        output_samples: list[int],
-    ) -> SpectrumLabResult:
-        output_signal = [sample / float(INT16_MAX) for sample in output_samples]
-        output_spectrum = dft(output_signal, len(output_signal))
-        return SpectrumLabResult(
-            input_signal=local_result.input_signal,
-            input_int16=local_result.input_int16,
-            input_spectrum=local_result.input_spectrum,
-            input_magnitude=local_result.input_magnitude,
-            gain_mask=local_result.gain_mask,
-            output_spectrum=output_spectrum,
-            output_signal=output_signal,
-            output_int16=Int16Frame(
-                samples=list(output_samples),
-                clipped=False,
-                max_abs_before_clip=max(abs(value) for value in output_samples)
-                if output_samples
-                else 0.0,
-            ),
-            output_magnitude=fft_magnitude(output_spectrum),
+        transport,
+        backend_name: str,
+        gains: Gains,
+        timeout_s: float = 5.0,
+    ) -> FrameComparison:
+        hardware_result = run_frame(
+            local_result.input_int16.samples,
+            gains,
+            transport,
+            timeout_s=timeout_s,
+        )
+        return build_frame_comparison(
+            local_result,
+            hardware_result.samples,
+            backend_name,
+            note=f"status_history={hardware_result.status_history}",
         )
 
     def simulate(self) -> None:
@@ -313,50 +318,75 @@ class SpectrumLabApp(tk.Tk):
                 frame_size=frame_size,
             )
             backend_mode = self.backend_mode_var.get()
+            gains = self._hardware_gains(modifications)
 
-            if backend_mode == "Local simulation":
-                self.result = local_result
-                backend_note = "local simulation"
-            else:
-                if frame_size != DEFAULT_FRAME_SIZE:
-                    raise ValueError("UART FPGA backend requires a 256-sample frame")
+            self.result = local_result
+            self.mock_comparison = None
+            self.serial_comparison = None
+            serial_note = "serial not requested"
 
-                gains = self._hardware_gains(modifications)
-                if backend_mode == "Mock FPGA backend":
-                    transport = MockFpgaTransport()
-                    backend_note = "mock FPGA loopback backend"
-                else:
+            if frame_size == DEFAULT_FRAME_SIZE:
+                mock_transport = MockFpgaTransport()
+                self.mock_comparison = self._run_backend_comparison(
+                    local_result,
+                    mock_transport,
+                    "Mock FPGA backend",
+                    gains,
+                )
+                mock_transport.close()
+
+                if backend_mode == "Serial FPGA backend":
                     port = self.serial_port_var.get().strip()
                     baud = int(self.baud_var.get())
                     if not port:
                         raise ValueError("serial backend requires a COM/TTY port")
-                    transport = SerialTransport(port, baudrate=baud, timeout_s=5.0)
-                    backend_note = f"serial FPGA backend on {port}"
 
-                try:
-                    hardware_result = run_frame(
-                        local_result.input_int16.samples,
-                        gains,
-                        transport,
-                        timeout_s=5.0,
-                    )
-                finally:
-                    transport.close()
+                    transport = None
+                    try:
+                        transport = SerialTransport(port, baudrate=baud, timeout_s=5.0)
+                        self.serial_comparison = self._run_backend_comparison(
+                            local_result,
+                            transport,
+                            f"Serial FPGA backend on {port}",
+                            gains,
+                        )
+                        serial_note = f"serial compared on {port}"
+                    except Exception as exc:
+                        self.serial_comparison = None
+                        serial_note = f"serial unavailable: {exc}"
+                    finally:
+                        if transport is not None:
+                            transport.close()
+                elif backend_mode == "Mock FPGA backend":
+                    serial_note = "serial not requested"
+                else:
+                    serial_note = "serial not requested"
+            else:
+                serial_note = "UART backends require a 256-sample frame"
 
-                self.result = self._with_backend_output(
-                    local_result,
-                    hardware_result.samples,
-                )
+            backend_note = "local simulation + comparison"
         except Exception as exc:  # pragma: no cover - GUI feedback path.
             messagebox.showerror("Simulation error", str(exc))
             return
 
         self.input_time_plot.redraw(self.result.input_signal)
-        half = max(1, frame_size // 2)
-        self.input_spectrum_plot.redraw(self.result.input_magnitude[:half])
-        self.output_time_plot.redraw(self.result.output_signal)
-        self.output_spectrum_plot.redraw(self.result.output_magnitude[:half])
+        self.local_output_plot.redraw(self.result.output_signal)
 
+        if self.mock_comparison is not None:
+            self.mock_output_plot.redraw(self.mock_comparison.backend_signal)
+            self.mock_diff_plot.redraw(self.mock_comparison.difference_signal)
+        else:
+            self.mock_output_plot.redraw([])
+            self.mock_diff_plot.redraw([])
+
+        if self.serial_comparison is not None:
+            self.serial_output_plot.redraw(self.serial_comparison.backend_signal)
+            self.serial_diff_plot.redraw(self.serial_comparison.difference_signal)
+        else:
+            self.serial_output_plot.redraw([])
+            self.serial_diff_plot.redraw([])
+
+        frame_size = len(self.result.input_signal)
         input_max = max(abs(value) for value in self.result.input_signal) if frame_size else 0.0
         output_max = max(abs(value) for value in self.result.output_signal) if frame_size else 0.0
         warnings = []
@@ -366,21 +396,45 @@ class SpectrumLabApp(tk.Tk):
             warnings.append("output clipping")
         warning_text = ", ".join(warnings) if warnings else "no clipping"
 
-        self.status_var.set(
+        comparison_lines = [
             f"samples={frame_size}; input_max={input_max:.4f}; "
-            f"output_max={output_max:.4f}; {warning_text}; "
-            f"backend={backend_note}"
-        )
+            f"local_output_max={output_max:.4f}; {warning_text}; "
+            f"backend={backend_note}",
+        ]
+
+        if self.mock_comparison is not None:
+            comparison_lines.append(
+                "mock_vs_local: "
+                + format_error_metrics(self.mock_comparison.metrics)
+                + "; mock is protocol loopback, so nonzero difference is expected "
+                + "when spectral gains change the local simulation"
+            )
+        else:
+            comparison_lines.append("mock_vs_local: unavailable")
+
+        if self.serial_comparison is not None:
+            comparison_lines.append(
+                "serial_vs_local: "
+                + format_error_metrics(self.serial_comparison.metrics)
+            )
+        else:
+            comparison_lines.append(f"serial_vs_local: {serial_note}")
+
+        self.status_var.set("\n".join(comparison_lines))
 
     def clear(self) -> None:
         self.result = None
+        self.mock_comparison = None
+        self.serial_comparison = None
         self.component_text.delete("1.0", "end")
         self.modification_text.delete("1.0", "end")
         for plot in [
             self.input_time_plot,
-            self.input_spectrum_plot,
-            self.output_time_plot,
-            self.output_spectrum_plot,
+            self.local_output_plot,
+            self.mock_output_plot,
+            self.serial_output_plot,
+            self.mock_diff_plot,
+            self.serial_diff_plot,
         ]:
             plot.redraw([])
         self.status_var.set("Ready. Backend: Local simulation.")
@@ -399,7 +453,19 @@ class SpectrumLabApp(tk.Tk):
 
         with Path(path).open("w", newline="", encoding="utf-8") as handle:
             writer = csv.writer(handle)
-            writer.writerow(["index", "input", "input_int16", "output", "output_int16"])
+            writer.writerow(
+                [
+                    "index",
+                    "input",
+                    "input_int16",
+                    "local_output",
+                    "local_output_int16",
+                    "mock_output_int16",
+                    "mock_minus_local_int16",
+                    "serial_output_int16",
+                    "serial_minus_local_int16",
+                ]
+            )
             for index, (input_value, input_i16, output_value, output_i16) in enumerate(
                 zip(
                     self.result.input_signal,
@@ -408,7 +474,39 @@ class SpectrumLabApp(tk.Tk):
                     self.result.output_int16.samples,
                 )
             ):
-                writer.writerow([index, input_value, input_i16, output_value, output_i16])
+                mock_value = (
+                    self.mock_comparison.backend_samples[index]
+                    if self.mock_comparison is not None
+                    else ""
+                )
+                mock_diff = (
+                    self.mock_comparison.difference_samples[index]
+                    if self.mock_comparison is not None
+                    else ""
+                )
+                serial_value = (
+                    self.serial_comparison.backend_samples[index]
+                    if self.serial_comparison is not None
+                    else ""
+                )
+                serial_diff = (
+                    self.serial_comparison.difference_samples[index]
+                    if self.serial_comparison is not None
+                    else ""
+                )
+                writer.writerow(
+                    [
+                        index,
+                        input_value,
+                        input_i16,
+                        output_value,
+                        output_i16,
+                        mock_value,
+                        mock_diff,
+                        serial_value,
+                        serial_diff,
+                    ]
+                )
 
         self.status_var.set(
             f"exported={path}; backend={self.backend_mode_var.get()}"
