@@ -33,6 +33,10 @@ PYTHON_TESTS = [
         "name": "spectrum_lab_hardware_backend",
         "command": [sys.executable, "tools/test_spectrum_lab_hardware_backend.py"],
     },
+    {
+        "name": "spectrum_lab_comparison",
+        "command": [sys.executable, "tools/test_spectrum_lab_comparison.py"],
+    },
 ]
 
 VECTOR_TESTS = [

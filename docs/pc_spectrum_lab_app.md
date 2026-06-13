@@ -3,12 +3,10 @@
 ## Cel aplikacji
 
 PC Spectrum Lab App to pierwszy front-end po stronie komputera dla obecnego
-kierunku FPGA-only FFT/IFFT. W tym branchu aplikacja działa wyłącznie w trybie
-symulacyjnym: generuje ramkę próbek, liczy lokalnie DFT, nakłada proste
-modyfikacje widma, liczy IDFT i pokazuje wynik graficznie.
-
-Ten etap nie wysyła jeszcze pełnych ramek do FPGA. Sprzętowy backend UART jest
-świadomie zostawiony jako placeholder.
+kierunku FPGA-only FFT/IFFT. Aplikacja generuje ramkę próbek, liczy lokalnie
+DFT, nakłada proste modyfikacje widma, liczy IDFT i pokazuje wynik graficznie.
+Aktualna wersja potrafi też porównać lokalny wynik z backendem Mock FPGA oraz,
+jeśli użytkownik wybierze port, z backendem Serial FPGA.
 
 ## Miejsce w projekcie FPGA
 
@@ -24,7 +22,7 @@ PC app
     -> PC app plots and reports
 ```
 
-Obecny branch implementuje tylko pierwszy, bezpieczny krok:
+Podstawowy lokalny model:
 
 ```text
 PC app simulation
@@ -35,32 +33,45 @@ PC app simulation
     -> plots and int16 preparation
 ```
 
+Porównanie z backendem:
+
+```text
+local output frame
+    -> comparison metrics
+FPGA backend output frame
+    -> max abs error / mean abs error / RMS error
+    -> difference plot
+```
+
 ## Pliki
 
 Model i aplikacja:
 
 ```text
 tools/spectrum_lab_model.py
+tools/spectrum_lab_comparison.py
 tools/spectrum_lab_app.py
 tools/spectrum_lab_demo.py
 tools/test_spectrum_lab_model.py
+tools/test_spectrum_lab_comparison.py
 ```
 
 Model nie wymaga `numpy`, `scipy`, `matplotlib` ani `pyserial`.
 
-## Tryb simulation-only
+## Tryby pracy
 
-Aplikacja symuluje cały tor lokalnie na PC. Nie zmienia protokołu UART
-istniejącej konsoli `uart_cpu_fft_console` i nie dodaje jeszcze protokołu
-wysyłania pełnych ramek próbek do FPGA.
+Aplikacja zawsze liczy lokalny wynik symulacji. Dla ramki 256 próbek może też
+uruchomić backendy zgodne z protokołem pełnych ramek UART:
 
-Aktualna konsola sprzętowa nadal obsługuje tylko istniejącą komendę:
+- `Local simulation` - tylko lokalny model Python jako punkt odniesienia.
+- `Mock FPGA backend` - deterministyczny backend protokołu, który zwraca
+  loopback wejścia.
+- `Serial FPGA backend` - opcjonalny realny port UART, jeśli pyserial i piny
+  sprzętowe są dostępne.
 
-```text
-PC -> FPGA: A5 01 5A
-```
-
-Ten branch nie modyfikuje tego protokołu.
+Mock backend nie jest modelem matematycznym FFT/IFFT. Jeżeli lokalna symulacja
+zmienia widmo, a mock zwraca kopię wejścia, różnica `mock - local` jest
+oczekiwana i widoczna w metrykach.
 
 ## Generowanie sygnału
 
@@ -145,10 +156,12 @@ Minimalne funkcje:
 - przycisk `Clear`,
 - eksport próbek do CSV,
 - wykres wejścia w dziedzinie czasu,
-- wykres wejściowego widma,
-- wykres wyjścia po symulacji,
-- wykres wyjściowego widma,
-- status z informacją o clippingu i placeholderze hardware UART.
+- wykres lokalnego wyjścia po symulacji,
+- wykres wyniku Mock FPGA backend,
+- wykres wyniku Serial FPGA backend, jeśli został uruchomiony,
+- wykres różnicy `mock - local`,
+- wykres różnicy `serial - local`, jeśli serial jest dostępny,
+- status z clippingiem i metrykami `max abs`, `mean abs`, `RMS error`.
 
 ## CLI demo
 
@@ -174,6 +187,7 @@ Model nie-GUI jest testowany przez:
 
 ```text
 python tools/test_spectrum_lab_model.py
+python tools/test_spectrum_lab_comparison.py
 ```
 
 Pełny runner projektu:
@@ -190,13 +204,13 @@ Test sprawdza:
 - zmianę oczekiwanego fragmentu widma po nałożeniu gain band,
 - długość wyjścia IDFT,
 - pełny przebieg modelu bez zależności GUI.
+- metryki porównawcze `max abs`, `mean abs`, `RMS error`,
+- ścieżkę Mock FPGA backend i oczekiwaną różnicę względem lokalnej symulacji.
 
 ## Ograniczenia
 
-Ten branch nie dodaje:
+Ten etap nie dodaje:
 
-- protokołu UART dla pełnych ramek próbek,
-- backendu PC -> FPGA,
 - sterowania sprzętem Tang Nano z GUI,
 - fizycznego I2S,
 - AXI-Lite,

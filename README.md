@@ -192,6 +192,9 @@ Moduły nowego kierunku zaimplementowane w obecnym etapie:
   `tools/spectrum_lab_uart_client.py` jako PC-side backend aplikacji Spectrum Lab
   dla protokołu pełnych ramek UART; mock działa bez pyserial, a serial backend
   jest opcjonalny.
+- `tools/spectrum_lab_comparison.py` jako helper porównujący wynik lokalnej
+  symulacji z wynikiem backendu FPGA oraz liczący `max abs`, `mean abs` i
+  `RMS error`.
 - `tools/fft_reference_model.py` jako Pythonowy golden model matematyczny
   toru FFT -> spectral gain -> IFFT.
 - GitHub Actions uruchamiające testy Verilog dla pull requestów i pushy na
