@@ -18,6 +18,7 @@ module cpu_owned_uart_frame_flow_tb;
     localparam [7:0] RSP_STATUS       = 8'h95;
 
     localparam [7:0] STATUS_INPUT_LOADED = 8'h01;
+    localparam [7:0] STATUS_CPU_BUSY     = 8'h02;
     localparam [7:0] STATUS_DONE         = 8'h04;
     localparam [7:0] STATUS_ERROR        = 8'h08;
     localparam [7:0] STATUS_TIMEOUT      = 8'h10;
@@ -105,6 +106,14 @@ module cpu_owned_uart_frame_flow_tb;
     integer wait_count;
     integer timeout_count;
     integer chunk_offset;
+    integer fft_start_write_count = 0;
+    integer frame_done_write_count = 0;
+    integer previous_fft_start_count;
+    integer previous_frame_done_count;
+    integer transaction_outputs_ok;
+    reg [7:0] last_status_byte = 8'd0;
+    reg busy_seen = 1'b0;
+    reg stale_done_cleared = 1'b0;
     integer outputs_ok = 1;
 
     assign packet_payload_rd_data = payload_mem[packet_payload_rd_addr];
@@ -169,9 +178,7 @@ module cpu_owned_uart_frame_flow_tb;
         .error_length_too_large(tx_error_length_too_large)
     );
 
-    mini_cpu_uart_frame_system #(
-        .PROGRAM_ID(`MINI_CPU_PROGRAM_UART_FRAME_ONCE)
-    ) cpu_system_inst (
+    mini_cpu_uart_frame_system cpu_system_inst (
         .clk(clk),
         .rst(rst),
         .frame_cpu_wr_en(frame_cpu_wr_en),
@@ -286,9 +293,11 @@ module cpu_owned_uart_frame_flow_tb;
         end
     endtask
 
-    task send_impulse_chunk;
+    task send_frame_chunk;
         input integer offset_value;
         input [7:0] seq_value;
+        input integer impulse_index;
+        input signed [15:0] impulse_value;
         begin
             clear_payload();
             payload_mem[0] = offset_value[7:0];
@@ -296,8 +305,8 @@ module cpu_owned_uart_frame_flow_tb;
             payload_mem[2] = 8'd32;
 
             for (i = 0; i < 32; i = i + 1) begin
-                if (offset_value + i == 0) begin
-                    set_payload_i16(3 + (i << 1), 16'sd64);
+                if (offset_value + i == impulse_index) begin
+                    set_payload_i16(3 + (i << 1), impulse_value);
                 end else begin
                     set_payload_i16(3 + (i << 1), 16'sd0);
                 end
@@ -383,11 +392,172 @@ module cpu_owned_uart_frame_flow_tb;
         end
     endtask
 
+    task get_status_packet;
+        input [7:0] seq_value;
+        begin
+            send_packet(CMD_GET_STATUS, seq_value, 16'd0);
+            wait_for_response(100);
+            if (response_packet_ok(RSP_STATUS, seq_value, 1)) begin
+                last_status_byte = captured[5];
+            end else begin
+                last_status_byte = 8'hFF;
+            end
+        end
+    endtask
+
+    task run_frame_transaction;
+        input integer impulse_index;
+        input signed [15:0] impulse_value;
+        input [7:0] seq_base;
+        input [8*40-1:0] name;
+        begin
+            previous_fft_start_count = fft_start_write_count;
+            previous_frame_done_count = frame_done_write_count;
+            transaction_outputs_ok = 1;
+            busy_seen = 1'b0;
+            stale_done_cleared = 1'b0;
+
+            for (chunk_offset = 0; chunk_offset < 256;
+                 chunk_offset = chunk_offset + 32) begin
+                send_frame_chunk(
+                    chunk_offset,
+                    seq_base + 8'h10 + (chunk_offset >> 5),
+                    impulse_index,
+                    impulse_value
+                );
+
+                if (!response_packet_ok(
+                        RSP_STATUS,
+                        seq_base + 8'h10 + (chunk_offset >> 5),
+                        1
+                    ) || captured[5] != STATUS_INPUT_LOADED) begin
+                    transaction_outputs_ok = 0;
+                end
+
+                if (captured[5] == STATUS_INPUT_LOADED) begin
+                    stale_done_cleared = 1'b1;
+                end
+            end
+
+            report_result({name, "_write_chunks"},
+                          transaction_outputs_ok && stale_done_cleared);
+            report_result({name, "_frame_loaded"}, frame_loaded == 1'b1);
+
+            send_packet(CMD_RUN_FRAME, seq_base + 8'h30, 16'd0);
+            wait_for_response(100);
+            report_result({name, "_run_response"},
+                          response_packet_ok(
+                              RSP_STATUS,
+                              seq_base + 8'h30,
+                              1
+                          ) && captured[5] == STATUS_INPUT_LOADED);
+
+            get_status_packet(seq_base + 8'h31);
+            report_result({name, "_status_clears_stale_done"},
+                          (last_status_byte & STATUS_DONE) == 8'd0 &&
+                          (last_status_byte & STATUS_ERROR) == 8'd0);
+
+            timeout_count = 0;
+            while ((last_status_byte & STATUS_DONE) == 8'd0 &&
+                   timeout_count < TIMEOUT_CYCLES) begin
+                if ((status_debug & STATUS_CPU_BUSY) != 8'd0) begin
+                    busy_seen = 1'b1;
+                end
+
+                if ((timeout_count & 10'h03F) == 0) begin
+                    get_status_packet(seq_base + 8'h40 + timeout_count[7:0]);
+                end
+
+                @(posedge clk);
+                #1;
+                timeout_count = timeout_count + 1;
+            end
+
+            if ((last_status_byte & STATUS_DONE) == 8'd0) begin
+                get_status_packet(seq_base + 8'h7E);
+            end
+
+            report_result({name, "_busy_seen"}, busy_seen == 1'b1);
+            report_result({name, "_done"},
+                          (last_status_byte & STATUS_DONE) != 8'd0);
+            report_result({name, "_idle_ready"},
+                          (status_debug & STATUS_CPU_BUSY) == 8'd0 &&
+                          cpu_halted == 1'b0);
+            report_result({name, "_no_error_timeout"},
+                          (last_status_byte &
+                           (STATUS_ERROR | STATUS_TIMEOUT)) == 8'd0);
+            report_result({name, "_fft_start_count"},
+                          fft_start_write_count >
+                          previous_fft_start_count);
+            report_result({name, "_frame_done_count"},
+                          frame_done_write_count >
+                          previous_frame_done_count);
+
+            outputs_ok = 1;
+            read_and_check_single(
+                seq_base + 8'h80,
+                16'd0,
+                (impulse_index == 0) ? impulse_value : 16'sd0,
+                {name, "_out0"}
+            );
+            read_and_check_single(
+                seq_base + 8'h81,
+                16'd1,
+                (impulse_index == 1) ? impulse_value : 16'sd0,
+                {name, "_out1"}
+            );
+            read_and_check_single(
+                seq_base + 8'h82,
+                16'd2,
+                (impulse_index == 2) ? impulse_value : 16'sd0,
+                {name, "_out2"}
+            );
+            read_and_check_single(
+                seq_base + 8'h83,
+                16'd16,
+                (impulse_index == 16) ? impulse_value : 16'sd0,
+                {name, "_out16"}
+            );
+            read_and_check_single(
+                seq_base + 8'h84,
+                16'd64,
+                (impulse_index == 64) ? impulse_value : 16'sd0,
+                {name, "_out64"}
+            );
+            read_and_check_single(
+                seq_base + 8'h85,
+                16'd128,
+                (impulse_index == 128) ? impulse_value : 16'sd0,
+                {name, "_out128"}
+            );
+            read_and_check_single(
+                seq_base + 8'h86,
+                16'd255,
+                (impulse_index == 255) ? impulse_value : 16'sd0,
+                {name, "_out255"}
+            );
+            report_result({name, "_selected_outputs"}, outputs_ok);
+        end
+    endtask
+
     always @(posedge clk) begin
         #1;
         if (tx_valid) begin
             captured[captured_count] = tx_data;
             captured_count = captured_count + 1;
+        end
+    end
+
+    always @(posedge clk) begin
+        #1;
+        if (!rst && bus_we_debug) begin
+            if (bus_addr_debug == 16'h9000 && bus_wdata_debug[0]) begin
+                fft_start_write_count = fft_start_write_count + 1;
+            end
+
+            if (bus_addr_debug == 16'hA001 && bus_wdata_debug[2]) begin
+                frame_done_write_count = frame_done_write_count + 1;
+            end
         end
     end
 
@@ -415,40 +585,16 @@ module cpu_owned_uart_frame_flow_tb;
                       mid_gain_q2_14 == 16'd16384 &&
                       treble_gain_q2_14 == 16'd16384);
 
-        for (chunk_offset = 0; chunk_offset < 256; chunk_offset = chunk_offset + 32) begin
-            send_impulse_chunk(chunk_offset, 8'h10 + (chunk_offset >> 5));
-        end
+        run_frame_transaction(0, 16'sd64, 8'h00, "frame0_impulse0");
 
         debug_sample_rd_addr = 8'd0;
         #1;
-        report_result("uart_writes_input0", debug_input_sample == 16'sd64);
+        report_result("frame0_uart_writes_input0",
+                      debug_input_sample == 16'sd64);
         debug_sample_rd_addr = 8'd1;
         #1;
-        report_result("uart_writes_input1", debug_input_sample == 16'sd0);
-        report_result("frame_loaded", frame_loaded == 1'b1);
-
-        send_packet(CMD_RUN_FRAME, 8'h30, 16'd0);
-        wait_for_response(100);
-        report_result("run_sets_request",
-                      response_packet_ok(RSP_STATUS, 8'h30, 1) &&
-                      status_debug == STATUS_INPUT_LOADED);
-
-        clear_payload();
-        payload_mem[0] = 8'h00;
-        payload_mem[1] = 8'h00;
-        payload_mem[2] = 8'd1;
-        send_packet(CMD_READ_RESULT_CHUNK, 8'h31, 16'd3);
-        wait_for_response(100);
-        report_result("read_before_done_rejected",
-                      response_packet_ok(CMD_ERROR, 8'h31, 1) &&
-                      captured[5] == CMD_READ_RESULT_CHUNK);
-
-        timeout_count = 0;
-        while (!cpu_halted && timeout_count < TIMEOUT_CYCLES) begin
-            @(posedge clk);
-            #1;
-            timeout_count = timeout_count + 1;
-        end
+        report_result("frame0_uart_writes_input1",
+                      debug_input_sample == 16'sd0);
 
         report_result("mini_cpu_detects_request",
                       debug_saw_frame_request == 1'b1);
@@ -465,28 +611,25 @@ module cpu_owned_uart_frame_flow_tb;
                       debug_fft_input128_written == 16'sd0 &&
                       debug_fft_input255_written == 16'sd0);
         report_result("mini_cpu_starts_fft", debug_fft_start_written == 1'b1);
-        report_result("mini_cpu_halts_after_frame", cpu_halted == 1'b1);
+        report_result("mini_cpu_service_loop_does_not_halt",
+                      cpu_halted == 1'b0);
         report_result("mini_cpu_writes_result_frame",
                       debug_frame_result0_written == 1'b1);
-        report_result("status_done_no_error",
-                      status_debug[2] == 1'b1 &&
-                      status_debug[3] == 1'b0 &&
-                      status_debug[4] == 1'b0);
 
-        send_packet(CMD_GET_STATUS, 8'h40, 16'd0);
-        wait_for_response(100);
-        report_result("get_status_done",
-                      response_packet_ok(RSP_STATUS, 8'h40, 1) &&
-                      captured[5] == (STATUS_INPUT_LOADED | STATUS_DONE));
+        run_frame_transaction(16, 16'sd80, 8'h80, "frame1_impulse16");
 
-        read_and_check_single(8'h41, 16'd0, 16'sd64, "output0");
-        read_and_check_single(8'h42, 16'd1, 16'sd0, "output1");
-        read_and_check_single(8'h43, 16'd2, 16'sd0, "output2");
-        read_and_check_single(8'h44, 16'd16, 16'sd0, "output16");
-        read_and_check_single(8'h45, 16'd64, 16'sd0, "output64");
-        read_and_check_single(8'h46, 16'd128, 16'sd0, "output128");
-        read_and_check_single(8'h47, 16'd255, 16'sd0, "output255");
-        report_result("read_result_selected_samples", outputs_ok);
+        debug_sample_rd_addr = 8'd0;
+        #1;
+        report_result("frame1_clears_previous_output0",
+                      debug_result_sample == 16'sd0);
+        debug_sample_rd_addr = 8'd16;
+        #1;
+        report_result("frame1_writes_new_output16",
+                      debug_result_sample == 16'sd80);
+        report_result("two_back_to_back_transactions",
+                      fft_start_write_count >= 2 &&
+                      frame_done_write_count >= 2 &&
+                      cpu_halted == 1'b0);
 
         report_result("no_fft_error_outputs",
                       fft_overflow == 1'b0 &&

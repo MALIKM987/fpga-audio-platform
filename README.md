@@ -183,7 +183,8 @@ Moduły nowego kierunku zaimplementowane w obecnym etapie:
   mini CPU zamiast bezpośrednio sterować akceleratorem.
 - `rtl/cpu/mini_cpu_uart_frame_system.v` jako symulacyjny system, w którym mini
   CPU czyta mailbox UART, kopiuje ramkę do `fft_accelerator_mmio`, startuje
-  FFT/IFFT, polluje status i zapisuje wynik z powrotem do mailboxa.
+  FFT/IFFT, polluje status, zapisuje wynik z powrotem do mailboxa i wraca do
+  oczekiwania na kolejne `RUN_FRAME` bez resetu.
 - `rtl/top/tang_cpu_owned_frame_uart_top.v` jako top integrujący bitowy UART,
   parser/formatter ramek, mailbox UART i `mini_cpu_uart_frame_system` bez
   zgadywania pinów UART w constraints.

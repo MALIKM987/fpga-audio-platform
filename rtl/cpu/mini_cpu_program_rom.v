@@ -239,7 +239,8 @@ module mini_cpu_program_rom #(
                 endcase
             end
 
-            `MINI_CPU_PROGRAM_UART_FRAME_ONCE: begin
+            `MINI_CPU_PROGRAM_UART_FRAME_ONCE,
+            `MINI_CPU_PROGRAM_UART_FRAME_SERVICE: begin
                 case (addr)
                     16'd0:    data = enc_imm(`MINI_CPU_OP_LD, 3'd0);
                     16'd1:    data = 16'hA000;
@@ -303,7 +304,15 @@ module mini_cpu_program_rom #(
                     16'd2102: data = 16'h00A5;
                     16'd2103: data = enc_imm(`MINI_CPU_OP_ST, 3'd0);
                     16'd2104: data = 16'h8000;
-                    16'd2105: data = enc_reg(`MINI_CPU_OP_HALT, 3'd0, 3'd0);
+                    16'd2105: begin
+                        if (PROGRAM_ID ==
+                            `MINI_CPU_PROGRAM_UART_FRAME_SERVICE) begin
+                            data = enc_jump(`MINI_CPU_OP_JMP);
+                        end else begin
+                            data = enc_reg(`MINI_CPU_OP_HALT, 3'd0, 3'd0);
+                        end
+                    end
+                    16'd2106: data = 16'd0;
 
                     16'd2110: data = enc_imm(`MINI_CPU_OP_LDI, 3'd0);
                     16'd2111: data = 16'h0009;
@@ -313,7 +322,15 @@ module mini_cpu_program_rom #(
                     16'd2115: data = 16'h00E1;
                     16'd2116: data = enc_imm(`MINI_CPU_OP_ST, 3'd0);
                     16'd2117: data = 16'h8000;
-                    16'd2118: data = enc_reg(`MINI_CPU_OP_HALT, 3'd0, 3'd0);
+                    16'd2118: begin
+                        if (PROGRAM_ID ==
+                            `MINI_CPU_PROGRAM_UART_FRAME_SERVICE) begin
+                            data = enc_jump(`MINI_CPU_OP_JMP);
+                        end else begin
+                            data = enc_reg(`MINI_CPU_OP_HALT, 3'd0, 3'd0);
+                        end
+                    end
+                    16'd2119: data = 16'd0;
 
                     default: begin
                         if (addr >= UART_FRAME_COPY_IN_BASE &&
