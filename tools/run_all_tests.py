@@ -58,6 +58,29 @@ VERILOG_TESTS = [
         ],
     },
     {
+        "name": "uart_frame_packet_rx",
+        "sources": [
+            "rtl/uart/uart_frame_packet_rx.v",
+            "tb/uart_frame_packet_rx_tb.v",
+        ],
+    },
+    {
+        "name": "uart_frame_packet_tx",
+        "sources": [
+            "rtl/uart/uart_frame_packet_tx.v",
+            "tb/uart_frame_packet_tx_tb.v",
+        ],
+    },
+    {
+        "name": "uart_frame_packet_mock_backend",
+        "sources": [
+            "rtl/uart/uart_frame_packet_rx.v",
+            "rtl/uart/uart_frame_packet_tx.v",
+            "rtl/uart/uart_frame_mock_backend.v",
+            "tb/uart_frame_packet_mock_backend_tb.v",
+        ],
+    },
+    {
         "name": "uart_cpu_fft_console_cmd",
         "sources": [
             "rtl/uart/uart_rx.v",
