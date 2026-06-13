@@ -170,7 +170,7 @@ module cpu_owned_uart_frame_flow_tb;
     );
 
     mini_cpu_uart_frame_system #(
-        .PROGRAM_ID(`MINI_CPU_PROGRAM_UART_FRAME_ONCE)
+        .PROGRAM_ID(`MINI_CPU_PROGRAM_UART_FRAME_SERVICE)
     ) cpu_system_inst (
         .clk(clk),
         .rst(rst),
@@ -286,9 +286,22 @@ module cpu_owned_uart_frame_flow_tb;
         end
     endtask
 
+    task wait_for_done_status;
+        begin
+            timeout_count = 0;
+            while ((status_debug & STATUS_DONE) == 8'd0 &&
+                   timeout_count < TIMEOUT_CYCLES) begin
+                @(posedge clk);
+                #1;
+                timeout_count = timeout_count + 1;
+            end
+        end
+    endtask
+
     task send_impulse_chunk;
         input integer offset_value;
         input [7:0] seq_value;
+        input signed [15:0] impulse_value;
         begin
             clear_payload();
             payload_mem[0] = offset_value[7:0];
@@ -297,7 +310,7 @@ module cpu_owned_uart_frame_flow_tb;
 
             for (i = 0; i < 32; i = i + 1) begin
                 if (offset_value + i == 0) begin
-                    set_payload_i16(3 + (i << 1), 16'sd64);
+                    set_payload_i16(3 + (i << 1), impulse_value);
                 end else begin
                     set_payload_i16(3 + (i << 1), 16'sd0);
                 end
@@ -305,6 +318,27 @@ module cpu_owned_uart_frame_flow_tb;
 
             send_packet(CMD_WRITE_FRAME_CHUNK, seq_value, 16'd67);
             wait_for_response(100);
+        end
+    endtask
+
+    task upload_impulse_frame;
+        input [7:0] seq_base;
+        input signed [15:0] impulse_value;
+        begin
+            for (chunk_offset = 0; chunk_offset < 256;
+                 chunk_offset = chunk_offset + 32) begin
+                send_impulse_chunk(
+                    chunk_offset,
+                    seq_base + (chunk_offset >> 5),
+                    impulse_value
+                );
+                report_result("write_frame_chunk_status",
+                              response_packet_ok(
+                                  RSP_STATUS,
+                                  seq_base + (chunk_offset >> 5),
+                                  1
+                              ) && captured[5] == STATUS_INPUT_LOADED);
+            end
         end
     endtask
 
@@ -383,6 +417,32 @@ module cpu_owned_uart_frame_flow_tb;
         end
     endtask
 
+    task run_frame_and_wait;
+        input [7:0] run_seq;
+        input [7:0] status_seq;
+        begin
+            send_packet(CMD_RUN_FRAME, run_seq, 16'd0);
+            wait_for_response(100);
+            report_result("run_sets_request",
+                          response_packet_ok(RSP_STATUS, run_seq, 1) &&
+                          captured[5] == STATUS_INPUT_LOADED);
+
+            wait_for_done_status();
+            report_result("service_loop_reaches_done",
+                          (status_debug & STATUS_DONE) != 8'd0);
+            report_result("service_loop_status_no_error_timeout",
+                          (status_debug &
+                           (STATUS_ERROR | STATUS_TIMEOUT)) == 8'd0);
+
+            send_packet(CMD_GET_STATUS, status_seq, 16'd0);
+            wait_for_response(100);
+            report_result("get_status_done",
+                          response_packet_ok(RSP_STATUS, status_seq, 1) &&
+                          captured[5] ==
+                              (STATUS_INPUT_LOADED | STATUS_DONE));
+        end
+    endtask
+
     always @(posedge clk) begin
         #1;
         if (tx_valid) begin
@@ -392,8 +452,8 @@ module cpu_owned_uart_frame_flow_tb;
     end
 
     initial begin
-        $display("=== CPU OWNED UART FRAME FLOW TEST ===");
-        $display("FRAME=impulse64");
+        $display("=== CPU OWNED UART FRAME SERVICE LOOP TEST ===");
+        $display("FRAME=two_impulse_transactions");
         $display("OWNERSHIP=UART_TO_MAILBOX_CPU_TO_FFT");
         $display("");
 
@@ -415,23 +475,21 @@ module cpu_owned_uart_frame_flow_tb;
                       mid_gain_q2_14 == 16'd16384 &&
                       treble_gain_q2_14 == 16'd16384);
 
-        for (chunk_offset = 0; chunk_offset < 256; chunk_offset = chunk_offset + 32) begin
-            send_impulse_chunk(chunk_offset, 8'h10 + (chunk_offset >> 5));
-        end
+        upload_impulse_frame(8'h10, 16'sd64);
 
         debug_sample_rd_addr = 8'd0;
         #1;
-        report_result("uart_writes_input0", debug_input_sample == 16'sd64);
+        report_result("first_frame_input0", debug_input_sample == 16'sd64);
         debug_sample_rd_addr = 8'd1;
         #1;
-        report_result("uart_writes_input1", debug_input_sample == 16'sd0);
-        report_result("frame_loaded", frame_loaded == 1'b1);
+        report_result("first_frame_input1", debug_input_sample == 16'sd0);
+        report_result("first_frame_loaded", frame_loaded == 1'b1);
 
         send_packet(CMD_RUN_FRAME, 8'h30, 16'd0);
         wait_for_response(100);
-        report_result("run_sets_request",
+        report_result("first_run_sets_request",
                       response_packet_ok(RSP_STATUS, 8'h30, 1) &&
-                      status_debug == STATUS_INPUT_LOADED);
+                      captured[5] == STATUS_INPUT_LOADED);
 
         clear_payload();
         payload_mem[0] = 8'h00;
@@ -443,13 +501,7 @@ module cpu_owned_uart_frame_flow_tb;
                       response_packet_ok(CMD_ERROR, 8'h31, 1) &&
                       captured[5] == CMD_READ_RESULT_CHUNK);
 
-        timeout_count = 0;
-        while (!cpu_halted && timeout_count < TIMEOUT_CYCLES) begin
-            @(posedge clk);
-            #1;
-            timeout_count = timeout_count + 1;
-        end
-
+        wait_for_done_status();
         report_result("mini_cpu_detects_request",
                       debug_saw_frame_request == 1'b1);
         report_result("mini_cpu_writes_fft_gains",
@@ -465,28 +517,48 @@ module cpu_owned_uart_frame_flow_tb;
                       debug_fft_input128_written == 16'sd0 &&
                       debug_fft_input255_written == 16'sd0);
         report_result("mini_cpu_starts_fft", debug_fft_start_written == 1'b1);
-        report_result("mini_cpu_halts_after_frame", cpu_halted == 1'b1);
         report_result("mini_cpu_writes_result_frame",
                       debug_frame_result0_written == 1'b1);
-        report_result("status_done_no_error",
+        report_result("mini_cpu_keeps_running_after_frame",
+                      cpu_halted == 1'b0);
+        report_result("first_status_done_no_error",
                       status_debug[2] == 1'b1 &&
                       status_debug[3] == 1'b0 &&
                       status_debug[4] == 1'b0);
 
         send_packet(CMD_GET_STATUS, 8'h40, 16'd0);
         wait_for_response(100);
-        report_result("get_status_done",
+        report_result("first_get_status_done",
                       response_packet_ok(RSP_STATUS, 8'h40, 1) &&
                       captured[5] == (STATUS_INPUT_LOADED | STATUS_DONE));
 
-        read_and_check_single(8'h41, 16'd0, 16'sd64, "output0");
-        read_and_check_single(8'h42, 16'd1, 16'sd0, "output1");
-        read_and_check_single(8'h43, 16'd2, 16'sd0, "output2");
-        read_and_check_single(8'h44, 16'd16, 16'sd0, "output16");
-        read_and_check_single(8'h45, 16'd64, 16'sd0, "output64");
-        read_and_check_single(8'h46, 16'd128, 16'sd0, "output128");
-        read_and_check_single(8'h47, 16'd255, 16'sd0, "output255");
-        report_result("read_result_selected_samples", outputs_ok);
+        outputs_ok = 1;
+        read_and_check_single(8'h41, 16'd0, 16'sd64, "first_output0");
+        read_and_check_single(8'h42, 16'd1, 16'sd0, "first_output1");
+        read_and_check_single(8'h43, 16'd2, 16'sd0, "first_output2");
+        read_and_check_single(8'h44, 16'd16, 16'sd0, "first_output16");
+        read_and_check_single(8'h45, 16'd64, 16'sd0, "first_output64");
+        read_and_check_single(8'h46, 16'd128, 16'sd0, "first_output128");
+        read_and_check_single(8'h47, 16'd255, 16'sd0, "first_output255");
+        report_result("first_read_result_selected_samples", outputs_ok);
+
+        upload_impulse_frame(8'h50, 16'sd32);
+        report_result("second_upload_clears_stale_done",
+                      (status_debug & STATUS_DONE) == 8'd0 &&
+                      frame_done == 1'b0);
+        debug_sample_rd_addr = 8'd0;
+        #1;
+        report_result("second_frame_input0", debug_input_sample == 16'sd32);
+
+        run_frame_and_wait(8'h70, 8'h71);
+        report_result("second_transaction_cpu_still_running",
+                      cpu_halted == 1'b0);
+
+        outputs_ok = 1;
+        read_and_check_single(8'h72, 16'd0, 16'sd32, "second_output0");
+        read_and_check_single(8'h73, 16'd1, 16'sd0, "second_output1");
+        read_and_check_single(8'h74, 16'd255, 16'sd0, "second_output255");
+        report_result("second_read_result_selected_samples", outputs_ok);
 
         report_result("no_fft_error_outputs",
                       fft_overflow == 1'b0 &&
