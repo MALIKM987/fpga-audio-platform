@@ -63,6 +63,10 @@ UART backend pełni rolę mailboxa:
 - ustawia request po `RUN_FRAME`,
 - udostępnia wynik zapisany przez mini CPU.
 
+`mini_cpu_uart_frame_system` używa domyślnie programu
+`MINI_CPU_PROGRAM_UART_FRAME_SERVICE`, więc po zakończeniu ramki wraca do
+czekania na kolejne `RUN_FRAME` bez resetu FPGA.
+
 ## Instancjonowane moduły
 
 Top instancjonuje:
@@ -91,7 +95,8 @@ READ_RESULT_CHUNK for requested result samples/chunks
 ```
 
 Pełna ramka ma 256 próbek signed int16. Każdy `WRITE_FRAME_CHUNK` przenosi
-32 próbki.
+32 próbki. Po zapisaniu następnej ramki backend czyści stare `DONE`, a mini CPU
+może obsłużyć kolejne `RUN_FRAME` w tej samej sesji.
 
 ## LED
 
@@ -129,6 +134,12 @@ Test obejmuje poziom bitowego UART:
 - sprawdzenie braku `ERROR` i `TIMEOUT`,
 - sprawdzenie, że mini CPU zobaczył request i uruchomił FFT MMIO,
 - sprawdzenie aktywnego LED po sukcesie.
+
+Wielotransakcyjne zachowanie service loop jest testowane bezpośrednio w:
+
+```text
+tb/cpu_owned_uart_frame_flow_tb.v
+```
 
 Test jest dodany do:
 
@@ -196,6 +207,4 @@ Po przypisaniu pinów:
 - Piny UART RX/TX nie są jeszcze potwierdzone.
 - Nie dodano ani nie zmieniono constraints Gowin.
 - Nie dodano I2S, AXI-Lite ani Gowin FFT IP.
-- Top używa obecnego programu `mini_cpu_uart_frame_system`, który jest etapem
-  bring-up CPU-owned frame flow.
 - Fizyczna walidacja na Tang Nano wymaga kolejnego kroku z pin confirmation.
