@@ -17,10 +17,18 @@ module uart_frame_buffer_backend_tb;
     localparam [7:0] RSP_RESULT_CHUNK = 8'h94;
     localparam [7:0] RSP_STATUS       = 8'h95;
 
-    localparam [7:0] STATUS_PASS         = 8'h01;
-    localparam [7:0] STATUS_DONE         = 8'h02;
-    localparam [7:0] STATUS_FRAME_LOADED = 8'h04;
+    localparam [7:0] STATUS_INPUT_LOADED = 8'h01;
+    localparam [7:0] STATUS_CPU_BUSY     = 8'h02;
+    localparam [7:0] STATUS_DONE         = 8'h04;
     localparam [7:0] STATUS_ERROR        = 8'h08;
+
+    localparam [15:0] FRAME_CONTROL      = 16'hA000;
+    localparam [15:0] FRAME_STATUS       = 16'hA001;
+    localparam [15:0] FRAME_BASS_GAIN    = 16'hA003;
+    localparam [15:0] FRAME_MID_GAIN     = 16'hA004;
+    localparam [15:0] FRAME_TREBLE_GAIN  = 16'hA005;
+    localparam [15:0] FRAME_INPUT_BASE   = 16'hA100;
+    localparam [15:0] FRAME_RESULT_BASE  = 16'hA200;
 
     reg clk = 1'b0;
     reg rst = 1'b1;
@@ -30,6 +38,10 @@ module uart_frame_buffer_backend_tb;
     reg [15:0] packet_payload_len = 16'd0;
     reg tx_ready = 1'b1;
     reg [7:0] debug_sample_rd_addr = 8'd0;
+    reg cpu_wr_en = 1'b0;
+    reg cpu_rd_en = 1'b0;
+    reg [15:0] cpu_addr = 16'd0;
+    reg [15:0] cpu_wdata = 16'd0;
 
     wire [PAYLOAD_ADDR_WIDTH-1:0] packet_payload_rd_addr;
     wire [7:0] packet_payload_rd_data;
@@ -54,6 +66,8 @@ module uart_frame_buffer_backend_tb;
     wire [7:0] status_debug;
     wire signed [15:0] debug_input_sample;
     wire signed [15:0] debug_result_sample;
+    wire [15:0] cpu_rdata;
+    wire cpu_ready;
 
     reg [7:0] payload_mem [0:MAX_PAYLOAD_LEN-1];
     reg [7:0] captured [0:255];
@@ -61,6 +75,7 @@ module uart_frame_buffer_backend_tb;
     integer errors = 0;
     integer i;
     integer wait_count;
+    reg [15:0] cpu_read_value;
 
     assign packet_payload_rd_data = payload_mem[packet_payload_rd_addr];
 
@@ -95,7 +110,13 @@ module uart_frame_buffer_backend_tb;
         .status_debug(status_debug),
         .debug_sample_rd_addr(debug_sample_rd_addr),
         .debug_input_sample(debug_input_sample),
-        .debug_result_sample(debug_result_sample)
+        .debug_result_sample(debug_result_sample),
+        .cpu_wr_en(cpu_wr_en),
+        .cpu_rd_en(cpu_rd_en),
+        .cpu_addr(cpu_addr),
+        .cpu_wdata(cpu_wdata),
+        .cpu_rdata(cpu_rdata),
+        .cpu_ready(cpu_ready)
     );
 
     uart_frame_packet_tx #(
@@ -159,6 +180,10 @@ module uart_frame_buffer_backend_tb;
             packet_seq = 8'd0;
             packet_payload_len = 16'd0;
             debug_sample_rd_addr = 8'd0;
+            cpu_wr_en = 1'b0;
+            cpu_rd_en = 1'b0;
+            cpu_addr = 16'd0;
+            cpu_wdata = 16'd0;
             clear_payload();
             clear_capture();
             repeat (4) @(negedge clk);
@@ -250,6 +275,36 @@ module uart_frame_buffer_backend_tb;
         end
     endtask
 
+    task cpu_read;
+        input [15:0] addr;
+        output [15:0] data;
+        begin
+            @(negedge clk);
+            cpu_addr = addr;
+            cpu_rd_en = 1'b1;
+            #1;
+            data = cpu_rdata;
+            @(negedge clk);
+            cpu_rd_en = 1'b0;
+            cpu_addr = 16'd0;
+        end
+    endtask
+
+    task cpu_write;
+        input [15:0] addr;
+        input [15:0] data;
+        begin
+            @(negedge clk);
+            cpu_addr = addr;
+            cpu_wdata = data;
+            cpu_wr_en = 1'b1;
+            @(negedge clk);
+            cpu_wr_en = 1'b0;
+            cpu_addr = 16'd0;
+            cpu_wdata = 16'd0;
+        end
+    endtask
+
     always @(posedge clk) begin
         #1;
         if (tx_valid) begin
@@ -260,7 +315,7 @@ module uart_frame_buffer_backend_tb;
 
     initial begin
         $display("=== UART FRAME BUFFER BACKEND TEST ===");
-        $display("MODE=FRAME_BUFFER_LOOPBACK_NO_FFT");
+        $display("MODE=CPU_VISIBLE_MAILBOX_NO_DIRECT_FFT");
         $display("");
 
         reset_system();
@@ -294,6 +349,12 @@ module uart_frame_buffer_backend_tb;
                       bass_gain_q2_14 == 16'h6000 &&
                       mid_gain_q2_14 == 16'h4000 &&
                       treble_gain_q2_14 == 16'h3000);
+        cpu_read(FRAME_BASS_GAIN, cpu_read_value);
+        report_result("cpu_reads_bass_gain", cpu_read_value == 16'h6000);
+        cpu_read(FRAME_MID_GAIN, cpu_read_value);
+        report_result("cpu_reads_mid_gain", cpu_read_value == 16'h4000);
+        cpu_read(FRAME_TREBLE_GAIN, cpu_read_value);
+        report_result("cpu_reads_treble_gain", cpu_read_value == 16'h3000);
 
         clear_payload();
         payload_mem[0] = 8'h00;
@@ -307,7 +368,7 @@ module uart_frame_buffer_backend_tb;
         wait_for_response(80);
         report_result("write_chunk_response",
                       response_packet_ok(RSP_STATUS, 8'h03, 1) &&
-                      captured[5] == STATUS_FRAME_LOADED);
+                      captured[5] == STATUS_INPUT_LOADED);
         debug_sample_rd_addr = 8'd0;
         #1;
         report_result("write_chunk_sample0", debug_input_sample == 16'sd10);
@@ -317,6 +378,10 @@ module uart_frame_buffer_backend_tb;
         debug_sample_rd_addr = 8'd3;
         #1;
         report_result("write_chunk_sample3", debug_input_sample == -16'sd40);
+        cpu_read(FRAME_INPUT_BASE, cpu_read_value);
+        report_result("cpu_reads_input0", cpu_read_value == 16'sd10);
+        cpu_read(FRAME_INPUT_BASE + 16'd1, cpu_read_value);
+        report_result("cpu_reads_input1", cpu_read_value == -16'sd20);
 
         clear_payload();
         payload_mem[0] = 8'h10;
@@ -339,18 +404,12 @@ module uart_frame_buffer_backend_tb;
         wait_for_response(400);
         report_result("run_frame_response",
                       response_packet_ok(RSP_STATUS, 8'h05, 1) &&
-                      captured[5] ==
-                          (STATUS_FRAME_LOADED | STATUS_PASS | STATUS_DONE));
-        report_result("run_frame_status",
-                      status_debug ==
-                          (STATUS_FRAME_LOADED | STATUS_PASS | STATUS_DONE) &&
-                      frame_done == 1'b1);
-        debug_sample_rd_addr = 8'd0;
-        #1;
-        report_result("run_copies_sample0", debug_result_sample == 16'sd10);
-        debug_sample_rd_addr = 8'd16;
-        #1;
-        report_result("run_copies_sample16", debug_result_sample == 16'sd111);
+                      captured[5] == STATUS_INPUT_LOADED);
+        cpu_read(FRAME_CONTROL, cpu_read_value);
+        report_result("run_sets_cpu_request", cpu_read_value[0] == 1'b1);
+        report_result("run_does_not_copy_without_cpu",
+                      status_debug == STATUS_INPUT_LOADED &&
+                      frame_done == 1'b0);
 
         clear_payload();
         payload_mem[0] = 8'h00;
@@ -358,11 +417,42 @@ module uart_frame_buffer_backend_tb;
         payload_mem[2] = 8'd4;
         send_packet(CMD_READ_RESULT_CHUNK, 8'h06, 16'd3);
         wait_for_response(100);
+        report_result("read_before_done_returns_error",
+                      response_packet_ok(CMD_ERROR, 8'h06, 1) &&
+                      captured[5] == CMD_READ_RESULT_CHUNK);
+
+        cpu_write(FRAME_CONTROL, 16'h0001);
+        cpu_write(FRAME_STATUS, STATUS_CPU_BUSY);
+        cpu_read(FRAME_CONTROL, cpu_read_value);
+        report_result("cpu_ack_clears_request", cpu_read_value[0] == 1'b0);
+        report_result("cpu_sets_busy", status_debug == STATUS_CPU_BUSY);
+
+        cpu_write(FRAME_RESULT_BASE, 16'sd10);
+        cpu_write(FRAME_RESULT_BASE + 16'd1, -16'sd20);
+        cpu_write(FRAME_RESULT_BASE + 16'd2, 16'sd30);
+        cpu_write(FRAME_RESULT_BASE + 16'd3, -16'sd40);
+        cpu_write(FRAME_RESULT_BASE + 16'd16, 16'sd111);
+        cpu_write(FRAME_RESULT_BASE + 16'd17, -16'sd222);
+        cpu_write(FRAME_STATUS, STATUS_INPUT_LOADED | STATUS_DONE);
+
+        debug_sample_rd_addr = 8'd0;
+        #1;
+        report_result("cpu_writes_result0", debug_result_sample == 16'sd10);
+        debug_sample_rd_addr = 8'd16;
+        #1;
+        report_result("cpu_writes_result16", debug_result_sample == 16'sd111);
+
+        clear_payload();
+        payload_mem[0] = 8'h00;
+        payload_mem[1] = 8'h00;
+        payload_mem[2] = 8'd4;
+        send_packet(CMD_READ_RESULT_CHUNK, 8'h07, 16'd3);
+        wait_for_response(100);
         report_result("read_result_response",
-                      response_packet_ok(RSP_RESULT_CHUNK, 8'h06, 12));
+                      response_packet_ok(RSP_RESULT_CHUNK, 8'h07, 12));
         report_result("read_result_header",
                       captured[5] ==
-                          (STATUS_FRAME_LOADED | STATUS_PASS | STATUS_DONE) &&
+                          (STATUS_INPUT_LOADED | STATUS_DONE) &&
                       captured[6] == 8'h00 &&
                       captured[7] == 8'h00 &&
                       captured[8] == 8'd4);
@@ -376,38 +466,37 @@ module uart_frame_buffer_backend_tb;
         payload_mem[0] = 8'h10;
         payload_mem[1] = 8'h00;
         payload_mem[2] = 8'd2;
-        send_packet(CMD_READ_RESULT_CHUNK, 8'h07, 16'd3);
+        send_packet(CMD_READ_RESULT_CHUNK, 8'h08, 16'd3);
         wait_for_response(100);
         report_result("read_result_offset16",
-                      response_packet_ok(RSP_RESULT_CHUNK, 8'h07, 8) &&
+                      response_packet_ok(RSP_RESULT_CHUNK, 8'h08, 8) &&
                       captured[6] == 8'h10 &&
                       captured[7] == 8'h00 &&
                       captured[8] == 8'd2 &&
                       payload_sample(4) == 16'sd111 &&
                       payload_sample(6) == -16'sd222);
 
-        send_packet(CMD_GET_STATUS, 8'h08, 16'd0);
+        send_packet(CMD_GET_STATUS, 8'h09, 16'd0);
         wait_for_response(60);
         report_result("get_status",
-                      response_packet_ok(RSP_STATUS, 8'h08, 1) &&
-                      captured[5] ==
-                          (STATUS_FRAME_LOADED | STATUS_PASS | STATUS_DONE));
+                      response_packet_ok(RSP_STATUS, 8'h09, 1) &&
+                      captured[5] == (STATUS_INPUT_LOADED | STATUS_DONE));
 
         clear_payload();
         payload_mem[0] = 8'd250;
         payload_mem[1] = 8'd0;
         payload_mem[2] = 8'd16;
-        send_packet(CMD_READ_RESULT_CHUNK, 8'h09, 16'd3);
+        send_packet(CMD_READ_RESULT_CHUNK, 8'h0A, 16'd3);
         wait_for_response(80);
         report_result("invalid_read_returns_error",
-                      response_packet_ok(CMD_ERROR, 8'h09, 1) &&
+                      response_packet_ok(CMD_ERROR, 8'h0A, 1) &&
                       captured[5] == CMD_READ_RESULT_CHUNK &&
                       (status_debug & STATUS_ERROR) != 8'd0);
 
-        send_packet(8'h55, 8'h0A, 16'd0);
+        send_packet(8'h55, 8'h0B, 16'd0);
         wait_for_response(80);
         report_result("unknown_returns_error",
-                      response_packet_ok(CMD_ERROR, 8'h0A, 1) &&
+                      response_packet_ok(CMD_ERROR, 8'h0B, 1) &&
                       captured[5] == 8'h55);
 
         report_result("tx_length_ok", tx_error_length_too_large == 1'b0);
