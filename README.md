@@ -123,6 +123,12 @@ Backend bufora ramek FPGA dla tego protokołu opisano w:
 docs/fpga_frame_buffer_backend.md
 ```
 
+CPU-owned flow dla pełnych ramek UART opisano w:
+
+```text
+docs/cpu_owned_uart_frame_flow.md
+```
+
 ## Planowana architektura FFT/IFFT
 
 Moduły nowego kierunku zaimplementowane w obecnym etapie:
@@ -161,8 +167,11 @@ Moduły nowego kierunku zaimplementowane w obecnym etapie:
   `rtl/uart/uart_frame_mock_backend.v` jako samodzielny model RTL protokołu
   pakietów UART, jeszcze bez integracji z FFT/IFFT.
 - `rtl/uart/uart_frame_buffer_backend.v` jako backend bufora ramek
-  256-próbkowych dla nowego protokołu UART; `RUN_FRAME` działa na razie jako
-  loopback `input_frame -> result_frame` bez podłączenia do FFT/IFFT.
+  256-próbkowych dla nowego protokołu UART; `RUN_FRAME` ustawia request dla
+  mini CPU zamiast bezpośrednio sterować akceleratorem.
+- `rtl/cpu/mini_cpu_uart_frame_system.v` jako symulacyjny system, w którym mini
+  CPU czyta mailbox UART, kopiuje ramkę do `fft_accelerator_mmio`, startuje
+  FFT/IFFT, polluje status i zapisuje wynik z powrotem do mailboxa.
 - `tools/fft_reference_model.py` jako Pythonowy golden model matematyczny
   toru FFT -> spectral gain -> IFFT.
 - GitHub Actions uruchamiające testy Verilog dla pull requestów i pushy na

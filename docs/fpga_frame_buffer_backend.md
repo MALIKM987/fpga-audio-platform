@@ -6,19 +6,25 @@ Ten etap dodaje samodzielny backend RTL dla pakietowego protokołu UART.
 Backend łączy parser/formatter ramek UART z prawdziwą pamięcią jednej ramki
 wejściowej i jednej ramki wynikowej po 256 próbek signed 16-bit.
 
-To nadal nie jest integracja z FFT/IFFT. Komenda `RUN_FRAME` działa obecnie jako
-kontrolowany tryb loopback:
+Pierwsza wersja z PR #53 działała jako kontrolowany loopback. Aktualny kierunek
+po kolejnym etapie jest CPU-owned: komenda `RUN_FRAME` nie kopiuje już danych
+lokalnie w backendzie. Ustawia tylko request widoczny dla mini CPU:
 
 ```text
-input_frame[0..255] -> result_frame[0..255]
+UART RUN_FRAME -> FRAME_CONTROL.run_request
 ```
 
-Dzięki temu można zweryfikować pełną ścieżkę:
+Wynik w `result_frame` powinien zostać zapisany przez mini CPU po wykonaniu
+akceleratora FFT/IFFT. Dzięki temu można zweryfikować pełną ścieżkę:
 
 ```text
 PC packet
     -> UART frame parser
     -> frame buffer backend
+    -> CPU-visible mailbox
+    -> mini CPU
+    -> fft_accelerator_mmio
+    -> mini CPU writes result_frame
     -> UART frame formatter
     -> PC response
 ```
@@ -52,6 +58,10 @@ Dodatkowe wyjścia diagnostyczne w testbenchu pokazują:
 - `treble_gain_q2_14`,
 - `status_debug`.
 
+Port CPU-visible mailbox pozwala mini CPU czytać próbki wejściowe i gainy oraz
+zapisywać próbki wyniku i status. Backend UART nie ma portów prowadzących do
+`fft_accelerator_mmio`.
+
 ## Komendy
 
 Format pakietu pozostaje zgodny z dokumentem:
@@ -67,7 +77,7 @@ Obsługiwane komendy:
 | `0x10` | `PING` | `0x90 PONG` | Brak payloadu. |
 | `0x11` | `SET_GAINS` | `0x95 STATUS` | Payload 6 bajtów: bass, mid, treble Q2.14 LE. |
 | `0x12` | `WRITE_FRAME_CHUNK` | `0x95 STATUS` | Zapisuje maksymalnie 32 próbki do `input_frame`. |
-| `0x13` | `RUN_FRAME` | `0x95 STATUS` | Na razie kopiuje input do result bez FFT/IFFT. |
+| `0x13` | `RUN_FRAME` | `0x95 STATUS` | Ustawia request dla mini CPU. |
 | `0x14` | `READ_RESULT_CHUNK` | `0x94 RESULT_CHUNK` | Odczytuje maksymalnie 32 próbki z `result_frame`. |
 | `0x15` | `GET_STATUS` | `0x95 STATUS` | Zwraca bieżący bajt statusu. |
 | inne | unknown | `0x7F ERROR` | Payload zawiera kod błędnej komendy. |
@@ -143,32 +153,38 @@ Status jest prosty i deterministyczny:
 
 | Bit | Znaczenie |
 | --- | --- |
-| 0 | `PASS` ustawiany po poprawnym `RUN_FRAME`. |
-| 1 | `DONE` ustawiany po zakończeniu `RUN_FRAME`. |
-| 2 | `FRAME_LOADED` ustawiany po poprawnym `WRITE_FRAME_CHUNK`. |
+| 0 | `INPUT_LOADED` ustawiany po poprawnym `WRITE_FRAME_CHUNK`. |
+| 1 | `CPU_BUSY` ustawiany przez mini CPU podczas przetwarzania. |
+| 2 | `DONE` ustawiany przez mini CPU po zapisaniu `result_frame`. |
 | 3 | `ERROR` ustawiany po błędnej komendzie albo błędnym payloadzie. |
+| 4 | `TIMEOUT` zarezerwowany dla przyszłego watchdog CPU. |
 
 Po resecie status wynosi `0x00`.
 
-Udany zapis chunku ustawia status na `0x04`. Udane `RUN_FRAME` po załadowaniu
-ramki ustawia status na `0x07`.
+Udany zapis chunku ustawia status `INPUT_LOADED`. Udane `RUN_FRAME` nie ustawia
+`DONE`; wystawia tylko `FRAME_CONTROL.run_request`. `DONE` pojawia się dopiero
+po zapisie statusu przez mini CPU.
 
 ## Tryb RUN_FRAME
 
-`RUN_FRAME` nie uruchamia jeszcze akceleratora FFT/IFFT. W tym branchu jest to
-celowy tryb loopback:
+`RUN_FRAME` nie uruchamia bezpośrednio akceleratora FFT/IFFT. Jest to celowy
+request do mini CPU:
 
 ```text
-for i in 0..255:
-    result_frame[i] = input_frame[i]
+host RUN_FRAME
+    -> backend sets run_request
+    -> mini CPU reads mailbox
+    -> mini CPU controls fft_accelerator_mmio
+    -> mini CPU writes result_frame and DONE
 ```
 
 To pozwala przetestować:
 
 - zapis ramki z PC,
 - przechowanie signed int16,
+- widoczność danych dla mini CPU,
 - odczyt wybranych fragmentów wyniku,
-- status `DONE/PASS`,
+- status `INPUT_LOADED/CPU_BUSY/DONE`,
 - odpowiedzi UART z checksumą.
 
 ## Testbench
@@ -186,7 +202,9 @@ Zakres testów:
 - zapis gainów Q2.14,
 - zapis chunku od offsetu 0,
 - zapis chunku od offsetu 16,
-- `RUN_FRAME` jako loopback,
+- `RUN_FRAME` jako request widoczny dla CPU,
+- odrzucenie `READ_RESULT_CHUNK` przed `DONE`,
+- odczyt próbek zapisanych przez port CPU,
 - odczyt wyników z offsetu 0 i 16,
 - `GET_STATUS`,
 - błąd przy niepoprawnym zakresie odczytu,
@@ -214,11 +232,9 @@ python -m py_compile tools/uart_frame_protocol.py
 
 Ten etap nie dodaje jeszcze:
 
-- połączenia z `fft_accelerator_mmio`,
-- połączenia z mini CPU,
+- bezpośredniego połączenia UART backendu z `fft_accelerator_mmio`,
 - połączenia z `uart_cpu_fft_console`,
 - fizycznego UART RX/TX top-level dla tego nowego protokołu,
-- prawdziwej FFT/IFFT w ścieżce `RUN_FRAME`,
 - I2S,
 - AXI-Lite,
 - Gowin FFT IP,

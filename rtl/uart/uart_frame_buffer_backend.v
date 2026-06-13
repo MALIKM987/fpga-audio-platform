@@ -34,7 +34,14 @@ module uart_frame_buffer_backend #(
 
     input  wire [7:0] debug_sample_rd_addr,
     output reg signed [15:0] debug_input_sample,
-    output reg signed [15:0] debug_result_sample
+    output reg signed [15:0] debug_result_sample,
+
+    input  wire        cpu_wr_en,
+    input  wire        cpu_rd_en,
+    input  wire [15:0] cpu_addr,
+    input  wire [15:0] cpu_wdata,
+    output reg  [15:0] cpu_rdata,
+    output wire        cpu_ready
 );
 
     localparam [7:0] CMD_PING              = 8'h10;
@@ -49,10 +56,19 @@ module uart_frame_buffer_backend #(
     localparam [7:0] RSP_RESULT_CHUNK = 8'h94;
     localparam [7:0] RSP_STATUS       = 8'h95;
 
-    localparam [7:0] STATUS_PASS         = 8'h01;
-    localparam [7:0] STATUS_DONE         = 8'h02;
-    localparam [7:0] STATUS_FRAME_LOADED = 8'h04;
+    localparam [7:0] STATUS_INPUT_LOADED = 8'h01;
+    localparam [7:0] STATUS_CPU_BUSY     = 8'h02;
+    localparam [7:0] STATUS_DONE         = 8'h04;
     localparam [7:0] STATUS_ERROR        = 8'h08;
+    localparam [7:0] STATUS_TIMEOUT      = 8'h10;
+
+    localparam [15:0] FRAME_CONTROL      = 16'hA000;
+    localparam [15:0] FRAME_STATUS       = 16'hA001;
+    localparam [15:0] FRAME_BASS_GAIN    = 16'hA003;
+    localparam [15:0] FRAME_MID_GAIN     = 16'hA004;
+    localparam [15:0] FRAME_TREBLE_GAIN  = 16'hA005;
+    localparam [15:0] FRAME_INPUT_BASE   = 16'hA100;
+    localparam [15:0] FRAME_RESULT_BASE  = 16'hA200;
 
     localparam [4:0] STATE_IDLE            = 5'd0;
     localparam [4:0] STATE_SET_BASS_L      = 5'd1;
@@ -82,6 +98,7 @@ module uart_frame_buffer_backend #(
     reg [7:0] copy_index = 8'd0;
     reg [7:0] sample_low_reg = 8'd0;
     reg [7:0] status_reg = 8'd0;
+    reg run_request = 1'b0;
 
     reg [7:0] resp_mem [0:MAX_PAYLOAD_LEN-1];
     reg signed [15:0] input_frame [0:FRAME_SAMPLES-1];
@@ -91,6 +108,7 @@ module uart_frame_buffer_backend #(
     integer resp_index;
 
     assign status_debug = status_reg;
+    assign cpu_ready = 1'b1;
 
     always @* begin
         if (tx_payload_rd_addr < MAX_PAYLOAD_LEN) begin
@@ -105,6 +123,28 @@ module uart_frame_buffer_backend #(
         end else begin
             debug_input_sample = 16'sd0;
             debug_result_sample = 16'sd0;
+        end
+
+        cpu_rdata = 16'd0;
+
+        if (cpu_rd_en) begin
+            if (cpu_addr == FRAME_CONTROL) begin
+                cpu_rdata = {15'd0, run_request};
+            end else if (cpu_addr == FRAME_STATUS) begin
+                cpu_rdata = {8'd0, status_reg};
+            end else if (cpu_addr == FRAME_BASS_GAIN) begin
+                cpu_rdata = bass_gain_q2_14;
+            end else if (cpu_addr == FRAME_MID_GAIN) begin
+                cpu_rdata = mid_gain_q2_14;
+            end else if (cpu_addr == FRAME_TREBLE_GAIN) begin
+                cpu_rdata = treble_gain_q2_14;
+            end else if (cpu_addr >= FRAME_INPUT_BASE &&
+                         cpu_addr < FRAME_INPUT_BASE + FRAME_SAMPLES) begin
+                cpu_rdata = input_frame[cpu_addr[7:0]];
+            end else if (cpu_addr >= FRAME_RESULT_BASE &&
+                         cpu_addr < FRAME_RESULT_BASE + FRAME_SAMPLES) begin
+                cpu_rdata = result_frame[cpu_addr[7:0]];
+            end
         end
     end
 
@@ -172,6 +212,7 @@ module uart_frame_buffer_backend #(
             copy_index <= 8'd0;
             sample_low_reg <= 8'd0;
             status_reg <= 8'd0;
+            run_request <= 1'b0;
 
             for (reset_index = 0; reset_index < FRAME_SAMPLES;
                  reset_index = reset_index + 1) begin
@@ -182,6 +223,28 @@ module uart_frame_buffer_backend #(
             tx_start <= 1'b0;
             ack_pulse <= 1'b0;
             error_pulse <= 1'b0;
+
+            if (cpu_wr_en) begin
+                if (cpu_addr == FRAME_CONTROL) begin
+                    if (cpu_wdata[0]) begin
+                        run_request <= 1'b0;
+                    end
+
+                    if (cpu_wdata[1]) begin
+                        run_request <= 1'b0;
+                        status_reg <= 8'd0;
+                        frame_loaded <= 1'b0;
+                        frame_done <= 1'b0;
+                    end
+                end else if (cpu_addr == FRAME_STATUS) begin
+                    status_reg <= cpu_wdata[7:0];
+                    frame_loaded <= cpu_wdata[0];
+                    frame_done <= cpu_wdata[2];
+                end else if (cpu_addr >= FRAME_RESULT_BASE &&
+                             cpu_addr < FRAME_RESULT_BASE + FRAME_SAMPLES) begin
+                    result_frame[cpu_addr[7:0]] <= cpu_wdata;
+                end
+            end
 
             case (state)
                 STATE_IDLE: begin
@@ -223,9 +286,23 @@ module uart_frame_buffer_backend #(
                             end
                         end else if (packet_cmd == CMD_RUN_FRAME &&
                                      packet_payload_len == 16'd0) begin
-                            copy_index <= 8'd0;
-                            frame_done <= 1'b0;
-                            state <= STATE_RUN_COPY;
+                            if ((status_reg & STATUS_INPUT_LOADED) != 8'd0 &&
+                                (status_reg & STATUS_CPU_BUSY) == 8'd0) begin
+                                run_request <= 1'b1;
+                                status_reg <=
+                                    (status_reg & STATUS_INPUT_LOADED);
+                                frame_done <= 1'b0;
+                                prepare_status_response(
+                                    packet_seq,
+                                    status_reg & STATUS_INPUT_LOADED
+                                );
+                                ack_pulse <= 1'b1;
+                            end else begin
+                                status_reg <= status_reg | STATUS_ERROR;
+                                prepare_error_response(packet_seq, packet_cmd);
+                                error_pulse <= 1'b1;
+                            end
+                            state <= STATE_START_RESP;
                         end else if (packet_cmd == CMD_READ_RESULT_CHUNK) begin
                             if (packet_payload_len == 16'd3) begin
                                 packet_payload_rd_addr <=
@@ -336,10 +413,10 @@ module uart_frame_buffer_backend #(
                         {packet_payload_rd_data, sample_low_reg};
 
                     if (sample_index + 8'd1 >= count_reg) begin
-                        status_reg <= STATUS_FRAME_LOADED;
+                        status_reg <= STATUS_INPUT_LOADED;
                         frame_loaded <= 1'b1;
                         frame_done <= 1'b0;
-                        prepare_status_response(seq_reg, STATUS_FRAME_LOADED);
+                        prepare_status_response(seq_reg, STATUS_INPUT_LOADED);
                         ack_pulse <= 1'b1;
                         state <= STATE_START_RESP;
                     end else begin
@@ -351,20 +428,7 @@ module uart_frame_buffer_backend #(
                 end
 
                 STATE_RUN_COPY: begin
-                    result_frame[copy_index] <= input_frame[copy_index];
-
-                    if (copy_index == FRAME_SAMPLES - 1) begin
-                        status_reg <= status_reg | STATUS_PASS | STATUS_DONE;
-                        frame_done <= 1'b1;
-                        prepare_status_response(
-                            seq_reg,
-                            status_reg | STATUS_PASS | STATUS_DONE
-                        );
-                        ack_pulse <= 1'b1;
-                        state <= STATE_START_RESP;
-                    end else begin
-                        copy_index <= copy_index + 8'd1;
-                    end
+                    state <= STATE_IDLE;
                 end
 
                 STATE_READ_OFF_L: begin
@@ -386,6 +450,9 @@ module uart_frame_buffer_backend #(
 
                     if (!range_is_valid(offset_reg, packet_payload_rd_data)) begin
                         status_reg <= status_reg | STATUS_ERROR;
+                        prepare_error_response(seq_reg, cmd_reg);
+                        error_pulse <= 1'b1;
+                    end else if ((status_reg & STATUS_DONE) == 8'd0) begin
                         prepare_error_response(seq_reg, cmd_reg);
                         error_pulse <= 1'b1;
                     end else begin
