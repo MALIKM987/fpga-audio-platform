@@ -93,6 +93,12 @@ Konsolę UART dla mini CPU i akceleratora FFT/IFFT opisano w:
 docs/uart_cpu_fft_console.md
 ```
 
+Top Tang Nano dla konsoli UART mini CPU -> FFT/IFFT opisano w:
+
+```text
+docs/tang_uart_cpu_fft_top.md
+```
+
 ## Planowana architektura FFT/IFFT
 
 Moduły nowego kierunku zaimplementowane w obecnym etapie:
@@ -119,6 +125,10 @@ Moduły nowego kierunku zaimplementowane w obecnym etapie:
 - `rtl/uart/uart_rx.v` i `rtl/uart/uart_cpu_fft_console.v` jako binarna konsola
   UART uruchamiająca program impulsowy CPU i zwracająca wynik przez `uart_tx`.
 - `tools/run_all_tests.py` jako podstawowy runner testów Verilog.
+- `rtl/top/tang_uart_cpu_fft_console_top.v` jako niski poziom ryzyka dla
+  uruchomienia konsoli UART na Tang Nano 20K.
+- `tools/uart_fft_console_client.py` jako opcjonalny klient PC do wysłania
+  pakietu `A5 01 5A` i dekodowania odpowiedzi.
 - `tools/fft_reference_model.py` jako Pythonowy golden model matematyczny
   toru FFT -> spectral gain -> IFFT.
 - GitHub Actions uruchamiające testy Verilog dla pull requestów i pushy na
@@ -129,7 +139,7 @@ Moduły nadal oznaczone jako TODO:
 - saturacja i dalsze skalowanie fixed-point,
 - integracja Gowin FFT IP,
 - fizyczny I2S,
-- UART/self-test dla nowego pipeline,
+- potwierdzone piny UART i osobny wariant constraints Gowin dla topu UART,
 - AXI-Lite,
 - UART bridge do banku rejestrów,
 - hardware PCM1808/PCM5102A.
