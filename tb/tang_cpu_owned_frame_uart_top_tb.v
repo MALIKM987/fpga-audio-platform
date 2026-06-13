@@ -221,6 +221,8 @@ module tang_cpu_owned_frame_uart_top_tb;
     task send_write_chunk_packet;
         input integer offset_value;
         input [7:0] seq_value;
+        input integer impulse_index;
+        input signed [15:0] impulse_value;
         reg signed [15:0] sample_value;
         integer sample_index;
         begin
@@ -231,8 +233,8 @@ module tang_cpu_owned_frame_uart_top_tb;
 
             for (sample_index = 0; sample_index < 32;
                  sample_index = sample_index + 1) begin
-                if (offset_value + sample_index == 0) begin
-                    sample_value = 16'sd64;
+                if (offset_value + sample_index == impulse_index) begin
+                    sample_value = impulse_value;
                 end else begin
                     sample_value = 16'sd0;
                 end
@@ -419,7 +421,12 @@ module tang_cpu_owned_frame_uart_top_tb;
 
         for (chunk_offset = 0; chunk_offset < 256;
              chunk_offset = chunk_offset + 32) begin
-            send_write_chunk_packet(chunk_offset, 8'h10 + (chunk_offset >> 5));
+            send_write_chunk_packet(
+                chunk_offset,
+                8'h10 + (chunk_offset >> 5),
+                0,
+                16'sd64
+            );
             receive_response_packet();
             report_result("write_frame_chunk_status",
                           response_packet_ok(
@@ -463,6 +470,59 @@ module tang_cpu_owned_frame_uart_top_tb;
         read_and_check_sample(16'd128, 8'h85, 16'sd0, "out128");
         read_and_check_sample(16'd255, 8'h86, 16'sd0, "out255");
         report_result("read_selected_result_samples", outputs_ok);
+
+        outputs_ok = 1'b1;
+        for (chunk_offset = 0; chunk_offset < 256;
+             chunk_offset = chunk_offset + 32) begin
+            send_write_chunk_packet(
+                chunk_offset,
+                8'h90 + (chunk_offset >> 5),
+                16,
+                16'sd80
+            );
+            receive_response_packet();
+            report_result("second_write_frame_chunk_status",
+                          response_packet_ok(
+                              RSP_STATUS,
+                              8'h90 + (chunk_offset >> 5),
+                              1
+                          ) && captured[5] == STATUS_INPUT_LOADED);
+        end
+
+        send_and_check_status_packet(
+            CMD_RUN_FRAME,
+            8'hB0,
+            "second_run_frame_response"
+        );
+        report_result("second_run_clears_stale_done",
+                      (status_byte & STATUS_DONE) == 8'd0 &&
+                      (status_byte & STATUS_INPUT_LOADED) != 8'd0);
+
+        poll_count = 0;
+        while ((status_byte & STATUS_DONE) == 8'd0 &&
+               poll_count < POLL_LIMIT) begin
+            send_and_check_status_packet(
+                CMD_GET_STATUS,
+                8'hC0 + poll_count[7:0],
+                "second_get_status_response"
+            );
+            poll_count = poll_count + 1;
+        end
+
+        report_result("second_poll_until_done",
+                      (status_byte & STATUS_DONE) != 8'd0);
+        report_result("second_status_no_error_timeout",
+                      (status_byte & (STATUS_ERROR | STATUS_TIMEOUT)) == 8'd0);
+
+        read_and_check_sample(16'd0, 8'hD0, 16'sd0, "second_out0");
+        read_and_check_sample(16'd16, 8'hD1, 16'sd80, "second_out16");
+        read_and_check_sample(16'd64, 8'hD2, 16'sd0, "second_out64");
+        read_and_check_sample(16'd255, 8'hD3, 16'sd0, "second_out255");
+        report_result("second_read_selected_result_samples", outputs_ok);
+        report_result("two_uart_transactions_without_reset",
+                      dut.cpu_halted === 1'b0 &&
+                      dut.status_debug[2] === 1'b1 &&
+                      dut.status_debug[3] === 1'b0);
 
         repeat (4) @(posedge clk);
         #1;

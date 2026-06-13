@@ -74,15 +74,17 @@ Zaktualizowany ROM programu:
 rtl/cpu/mini_cpu_program_rom.v
 ```
 
-Nowy program ROM:
+Programy ROM dla tego flow:
 
 ```text
 MINI_CPU_PROGRAM_UART_FRAME_ONCE
+MINI_CPU_PROGRAM_UART_FRAME_SERVICE
 ```
 
-Program wykonuje jedną transakcję frame-processing i zatrzymuje CPU po
-zakończeniu. To celowo mały etap demonstracyjny, nie jeszcze stała usługa
-działająca w nieskończonej pętli.
+`MINI_CPU_PROGRAM_UART_FRAME_ONCE` pozostaje jako jednorazowy wariant
+historyczny. Domyślny `mini_cpu_uart_frame_system` używa teraz
+`MINI_CPU_PROGRAM_UART_FRAME_SERVICE`, który po zakończeniu ramki wraca do
+stanu oczekiwania na kolejne `RUN_FRAME` zamiast zatrzymywać CPU.
 
 ## Mapa mailboxa
 
@@ -137,7 +139,7 @@ samodzielnie obliczać ani kopiować wyników.
 
 ## Sekwencja CPU
 
-Program `MINI_CPU_PROGRAM_UART_FRAME_ONCE` wykonuje:
+Program `MINI_CPU_PROGRAM_UART_FRAME_SERVICE` wykonuje:
 
 1. Czeka na `FRAME_CONTROL.run_request`.
 2. Ustawia `FRAME_STATUS.CPU_BUSY`.
@@ -150,7 +152,13 @@ Program `MINI_CPU_PROGRAM_UART_FRAME_ONCE` wykonuje:
 9. Polluje `FFT_STATUS` do `DONE` albo `ERROR/OVERFLOW`.
 10. Kopiuje `FFT_OUTPUT_SAMPLE[0..255]` do `FRAME_RESULT_SAMPLE[0..255]`.
 11. Ustawia status `INPUT_LOADED | DONE`.
-12. Zapisuje `GPIO_RESULT=0x00A5` i zatrzymuje CPU.
+12. Zapisuje `GPIO_RESULT=0x00A5`.
+13. Wraca do kroku 1 i czeka na następny `RUN_FRAME`.
+
+W wariancie błędu CPU zapisuje status `INPUT_LOADED | ERROR`, ustawia
+`GPIO_RESULT=0x00E1` i również wraca do stanu oczekiwania. Dzięki temu stare
+flagi `DONE` albo `ERROR` nie blokują kolejnej transakcji, o ile host wgra nową
+ramkę i ponownie wyśle `RUN_FRAME`.
 
 ## Testy
 
@@ -172,6 +180,9 @@ Test sprawdza:
 - zakończenie FFT/IFFT,
 - zapis wyniku przez CPU do `FRAME_RESULT_SAMPLE`,
 - odczyt wybranych próbek przez UART backend,
+- dwie transakcje ramkowe bez resetu,
+- wyczyszczenie starego `DONE` przed następnym uruchomieniem,
+- powrót CPU do stanu idle/ready bez `HALT`,
 - brak `ERROR/TIMEOUT` dla poprawnej ramki.
 
 Istniejący test:
@@ -199,18 +210,20 @@ Ten etap nadal nie dodaje:
 - I2S,
 - AXI-Lite,
 - Gowin FFT IP,
-- stałego programu CPU działającego jako wielotransakcyjna usługa.
+- fizycznej walidacji wielotransakcyjnej usługi na Tang Nano.
 
-Program CPU jest na razie jednorazowym flow do symulacji i weryfikacji
-własności architektury.
+Program CPU jest już pętlą usługową w symulacji. Nadal wymaga potwierdzenia
+pinów UART i testu na płytce przed traktowaniem go jako gotowego toru
+sprzętowego.
 
 ## Następny branch
 
 Rekomendowany następny etap:
 
 ```text
-codex/pc-app-uart-fpga-backend
+codex/pc-fpga-result-comparison-plots
 ```
 
-Ten branch może połączyć aplikację PC z nowym pakietowym backendem FPGA bez
-zmiany zasady, że akceleratorem steruje wyłącznie mini CPU.
+Ten branch może porównać wyniki odebrane z FPGA z modelem PC i przygotować
+wykresy różnic. Równolegle warto przygotować
+`codex/tang-uart-pin-confirmation` dla fizycznego przypisania pinów UART.

@@ -197,5 +197,5 @@ Po przypisaniu pinów:
 - Nie dodano ani nie zmieniono constraints Gowin.
 - Nie dodano I2S, AXI-Lite ani Gowin FFT IP.
 - Top używa obecnego programu `mini_cpu_uart_frame_system`, który jest etapem
-  bring-up CPU-owned frame flow.
+  bring-up CPU-owned frame flow i obsługuje kolejne `RUN_FRAME` bez resetu.
 - Fizyczna walidacja na Tang Nano wymaga kolejnego kroku z pin confirmation.
