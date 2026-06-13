@@ -36,6 +36,48 @@ VECTOR_TESTS = [
 
 VERILOG_TESTS = [
     {
+        "name": "mini_cpu_fetch_halt",
+        "sources": [
+            "rtl/cpu/mini_cpu_program_rom.v",
+            "rtl/cpu/mini_cpu_core.v",
+            "tb/mini_cpu_fetch_halt_tb.v",
+        ],
+    },
+    {
+        "name": "mini_cpu_alu",
+        "sources": [
+            "rtl/cpu/mini_cpu_program_rom.v",
+            "rtl/cpu/mini_cpu_core.v",
+            "tb/mini_cpu_alu_tb.v",
+        ],
+    },
+    {
+        "name": "mini_cpu_branch",
+        "sources": [
+            "rtl/cpu/mini_cpu_program_rom.v",
+            "rtl/cpu/mini_cpu_core.v",
+            "tb/mini_cpu_branch_tb.v",
+        ],
+    },
+    {
+        "name": "mini_cpu_mmio",
+        "sources": [
+            "rtl/cpu/mini_cpu_program_rom.v",
+            "rtl/cpu/mini_cpu_core.v",
+            "rtl/cpu/mini_cpu_system.v",
+            "tb/mini_cpu_mmio_tb.v",
+        ],
+    },
+    {
+        "name": "mini_cpu_gpio_program",
+        "sources": [
+            "rtl/cpu/mini_cpu_program_rom.v",
+            "rtl/cpu/mini_cpu_core.v",
+            "rtl/cpu/mini_cpu_system.v",
+            "tb/mini_cpu_gpio_program_tb.v",
+        ],
+    },
+    {
         "name": "fft_butterfly_addr_gen",
         "sources": [
             "rtl/dsp/fft_butterfly_addr_gen.v",
