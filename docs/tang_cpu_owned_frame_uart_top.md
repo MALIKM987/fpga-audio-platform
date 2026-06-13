@@ -168,6 +168,13 @@ uart_tx -> TODO
 led     -> TODO albo znany LED z osobnego wariantu constraints
 ```
 
+Szczegółowa procedura potwierdzania pinów UART i checklistę testu sprzętowego
+opisuje:
+
+```text
+docs/tang_uart_pin_confirmation.md
+```
+
 Po potwierdzeniu pinów należy przygotować osobny wariant constraints albo
 osobny projekt Gowin dla tego topu. Nie należy nadpisywać istniejącego setupu
 hardware self-testu FFT/IFFT.
