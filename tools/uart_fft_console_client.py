@@ -38,7 +38,10 @@ def format_hex(data: bytes) -> str:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Run the FPGA UART FFT impulse test and decode the response."
+        description=(
+            "Run the FPGA UART FFT impulse test and decode the selected-sample "
+            "response."
+        )
     )
     parser.add_argument(
         "port",
@@ -69,6 +72,8 @@ def main() -> int:
     print(f"PORT={args.port}")
     print(f"BAUD={args.baud}")
     print(f"COMMAND={format_hex(COMMAND)}")
+    print("RESPONSE_FORMAT=A5 81 STATUS selected_samples 5A")
+    print("SELECTED_SAMPLES=out0,out1,out2,out16,out64,out128,out255")
 
     try:
         with serial.Serial(
@@ -115,7 +120,7 @@ def main() -> int:
         print(f"  {name.upper()}={1 if value else 0}")
 
     print("")
-    print("SAMPLES:")
+    print("SELECTED OUTPUT SAMPLES:")
     for name, value in zip(SAMPLE_NAMES, samples):
         print(f"  {name}={value}")
 
