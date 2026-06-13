@@ -1,7 +1,7 @@
 `include "rtl/cpu/mini_cpu_defs.vh"
 
 module mini_cpu_uart_frame_system #(
-    parameter integer PROGRAM_ID     = `MINI_CPU_PROGRAM_UART_FRAME_ONCE,
+    parameter integer PROGRAM_ID     = `MINI_CPU_PROGRAM_UART_FRAME_SERVICE,
     parameter integer FFT_SIZE       = 256,
     parameter integer SAMPLE_WIDTH   = 16,
     parameter integer DATA_WIDTH     = 16,
