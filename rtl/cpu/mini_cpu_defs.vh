@@ -20,5 +20,6 @@
 `define MINI_CPU_PROGRAM_BRANCH     2
 `define MINI_CPU_PROGRAM_MMIO       3
 `define MINI_CPU_PROGRAM_GPIO       4
+`define MINI_CPU_PROGRAM_FFT_IMPULSE 5
 
 `endif

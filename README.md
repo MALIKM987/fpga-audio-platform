@@ -81,6 +81,12 @@ Wlasny mini CPU i jego niezalezne testy opisano w:
 docs/custom_mini_cpu.md
 ```
 
+Integracje mini CPU z akceleratorem FFT/IFFT MMIO opisano w:
+
+```text
+docs/mini_cpu_fft_integration.md
+```
+
 ## Planowana architektura FFT/IFFT
 
 Moduły nowego kierunku zaimplementowane w obecnym etapie:
@@ -102,6 +108,8 @@ Moduły nowego kierunku zaimplementowane w obecnym etapie:
 - `rtl/cpu/mini_cpu_core.v`, `rtl/cpu/mini_cpu_program_rom.v` i
   `rtl/cpu/mini_cpu_system.v` jako niezalezny, testowany mini CPU do przyszlego
   sterowania rejestrami MMIO akceleratora.
+- `rtl/cpu/mini_cpu_fft_system.v` jako symulacyjna integracja mini CPU z
+  `fft_accelerator_mmio`, ramka impulsowa, polling STATUS i GPIO PASS/FAIL.
 - `tools/run_all_tests.py` jako podstawowy runner testów Verilog.
 - `tools/fft_reference_model.py` jako Pythonowy golden model matematyczny
   toru FFT -> spectral gain -> IFFT.
@@ -116,7 +124,7 @@ Moduły nadal oznaczone jako TODO:
 - UART/self-test dla nowego pipeline,
 - AXI-Lite,
 - UART bridge do banku rejestrów,
-- integracja mini CPU z `fft_accelerator_mmio`,
+- UART/console bridge dla zintegrowanego mini CPU i akceleratora,
 - hardware PCM1808/PCM5102A.
 
 `sample_block_buffer` zbiera ramkę próbek, a `spectral_gain_select` i
@@ -229,6 +237,8 @@ Zaimplementowane:
   rejestry sterujące + `fft_ifft_pipeline`.
 - `mini_cpu_core`, `mini_cpu_program_rom` i `mini_cpu_system` jako
   niezalezna infrastruktura prostego CPU do przyszlego sterowania MMIO.
+- `mini_cpu_fft_system` jako symulacyjny system CPU -> FFT/IFFT MMIO z
+  programem impulsowym i GPIO PASS/FAIL.
 - `tools/run_all_tests.py` jako runner podstawowych testbenchy Verilog.
 - GitHub Actions jako automatyczne uruchamianie testów Verilog na GitHubie.
 
@@ -241,7 +251,6 @@ Niezaimplementowane jeszcze:
 - Gowin FFT IP.
 - AXI-Lite.
 - UART bridge do banku rejestrów.
-- Integracja mini CPU z rejestrami FFT/IFFT MMIO.
 - Fizyczny I2S dla nowego pipeline.
 - UART/self-test zintegrowany z nowym pipeline.
 - Hardware PCM1808/PCM5102A w ścieżce FFT/IFFT.
