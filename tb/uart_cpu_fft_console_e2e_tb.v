@@ -28,6 +28,7 @@ module uart_cpu_fft_console_e2e_tb;
     integer errors = 0;
     integer i;
     integer wait_guard;
+    integer response_seen;
     reg [7:0] response [0:RESPONSE_LEN-1];
     reg stop_bit;
     reg outputs_ok;
@@ -101,12 +102,12 @@ module uart_cpu_fft_console_e2e_tb;
         output stop_value;
         begin
             wait_guard = 0;
-            while (uart_tx_line == 1'b1 && wait_guard < 700000) begin
+            while (uart_tx_line == 1'b1 && wait_guard < 5000) begin
                 @(posedge clk);
                 wait_guard = wait_guard + 1;
             end
 
-            if (wait_guard >= 700000) begin
+            if (wait_guard >= 5000) begin
                 byte_value = 8'h00;
                 stop_value = 1'b0;
             end else begin
@@ -168,11 +169,31 @@ module uart_cpu_fft_console_e2e_tb;
 
         send_run_packet();
 
-        for (i = 0; i < RESPONSE_LEN; i = i + 1) begin
-            receive_uart_byte(response[i], stop_bit);
-            if (stop_bit !== 1'b1) begin
-                errors = errors + 1;
-                $display("TEST uart_stop_bit_%0d FAIL", i);
+        wait_guard = 0;
+        response_seen = 0;
+        while (!response_seen && wait_guard < 650000) begin
+            @(posedge clk);
+            #1;
+            wait_guard = wait_guard + 1;
+
+            if (response_active) begin
+                response_seen = 1;
+            end
+        end
+
+        report_result("response_started", response_seen == 1);
+
+        if (response_seen) begin
+            for (i = 0; i < RESPONSE_LEN; i = i + 1) begin
+                receive_uart_byte(response[i], stop_bit);
+                if (stop_bit !== 1'b1) begin
+                    errors = errors + 1;
+                    $display("TEST uart_stop_bit_%0d FAIL", i);
+                end
+            end
+        end else begin
+            for (i = 0; i < RESPONSE_LEN; i = i + 1) begin
+                response[i] = 8'h00;
             end
         end
 
