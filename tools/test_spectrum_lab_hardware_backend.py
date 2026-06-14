@@ -16,6 +16,7 @@ from spectrum_lab_hardware_backend import (
     poll_status,
     q2_14_to_float,
     run_frame,
+    signal_component_warnings,
 )
 from spectrum_lab_model import SignalComponent, SpectrumModification, simulate_spectrum_lab
 from uart_frame_protocol import (
@@ -175,15 +176,31 @@ def test_hardware_operating_warnings() -> bool:
         [
             SpectrumModification(1000.0, 500.0, 4.0),
             SpectrumModification(2700.0, 600.0, 0.5),
+            SpectrumModification(3300.0, 600.0, -3.0),
             SpectrumModification(30_000.0, 800.0, 1.0),
         ]
     )
     joined = "\n".join(warnings)
     return (
         "gain 4" in joined
+        and "positive limit" in joined
+        and "gain -3" in joined
+        and "negative limit" in joined
         and "above Nyquist" in joined
+        and "same hardware band collision" in joined
         and "hardware MID band" in joined
     )
+
+
+def test_signal_component_warnings() -> bool:
+    warnings = signal_component_warnings(
+        [
+            SignalComponent(1000.0, 0.1),
+            SignalComponent(25_000.0, 0.1),
+        ]
+    )
+    joined = "\n".join(warnings)
+    return "input component frequency 25000" in joined and "Nyquist 24000" in joined
 
 
 def main() -> int:
@@ -200,6 +217,7 @@ def main() -> int:
     report("gain_q2_14_helpers", test_gain_q2_14_helpers())
     report("hardware_gain_mapping", test_hardware_gain_mapping())
     report("hardware_operating_warnings", test_hardware_operating_warnings())
+    report("signal_component_warnings", test_signal_component_warnings())
 
     if ERRORS == 0:
         print("STATUS=PASS")

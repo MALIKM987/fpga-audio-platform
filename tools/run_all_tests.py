@@ -37,6 +37,10 @@ PYTHON_TESTS = [
         "command": [sys.executable, "tools/test_spectrum_lab_model.py"],
     },
     {
+        "name": "spectrum_lab_presets",
+        "command": [sys.executable, "tools/test_spectrum_lab_presets.py"],
+    },
+    {
         "name": "uart_frame_protocol",
         "command": [sys.executable, "tools/test_uart_frame_protocol.py"],
     },

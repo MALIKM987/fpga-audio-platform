@@ -12,7 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import time
 
-from spectrum_lab_model import SpectrumModification
+from spectrum_lab_model import SignalComponent, SpectrumModification
 from uart_frame_protocol import (
     CMD_ERROR,
     CMD_PONG,
@@ -160,13 +160,20 @@ def hardware_operating_warnings(
     for modification in modifications:
         if modification.center_frequency_hz > nyquist:
             warnings.append(
-                f"frequency {modification.center_frequency_hz:g} Hz is above Nyquist"
+                f"frequency {modification.center_frequency_hz:g} Hz is above "
+                f"Nyquist {nyquist:g} Hz for Fs={sample_rate_hz:g} Hz"
             )
-        if gain_was_clipped(modification.gain):
+        if modification.gain > HARDWARE_GAIN_MAX_FLOAT:
             warnings.append(
-                "gain "
-                f"{modification.gain:g} is clipped to signed Q2.14 range "
-                f"{HARDWARE_GAIN_MIN_FLOAT:.3f}..{HARDWARE_GAIN_MAX_FLOAT:.3f}"
+                f"gain {modification.gain:g} is above signed Q2.14 positive "
+                f"limit +{HARDWARE_GAIN_MAX_FLOAT:.5f}; FPGA clips it to "
+                "about gain=2.0"
+            )
+        elif modification.gain < HARDWARE_GAIN_MIN_FLOAT:
+            warnings.append(
+                f"gain {modification.gain:g} is below signed Q2.14 negative "
+                f"limit {HARDWARE_GAIN_MIN_FLOAT:.1f}; FPGA clips it to "
+                "gain=-2.0"
             )
 
         band = hardware_band_for_frequency(
@@ -179,8 +186,28 @@ def hardware_operating_warnings(
     for band, count in sorted(seen_bands.items()):
         if count > 1:
             warnings.append(
-                f"{count} modifications map to hardware {band.upper()} band; "
+                f"same hardware band collision: {count} modifications map to "
+                f"hardware {band.upper()} band; "
                 "only the last gain is sent to FPGA"
+            )
+
+    return warnings
+
+
+def signal_component_warnings(
+    components: list[SignalComponent] | tuple[SignalComponent, ...],
+    sample_rate_hz: float = 48_000.0,
+) -> list[str]:
+    """Return warnings for generated input components outside sample-rate limits."""
+
+    warnings: list[str] = []
+    nyquist = sample_rate_hz / 2.0
+
+    for component in components:
+        if abs(component.frequency_hz) > nyquist:
+            warnings.append(
+                f"input component frequency {component.frequency_hz:g} Hz is above "
+                f"Nyquist {nyquist:g} Hz for Fs={sample_rate_hz:g} Hz"
             )
 
     return warnings
