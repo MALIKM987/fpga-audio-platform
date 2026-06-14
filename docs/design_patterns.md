@@ -1,7 +1,5 @@
 # Wzorce projektowe
 
-Projekt używa kilku praktycznych wzorców projektowych. Nie są one dodane
-sztucznie; wynikają z podziału odpowiedzialności między PC, UART, CPU i DSP.
 
 ## Strategy
 
