@@ -1,7 +1,5 @@
 # Dokumentacja projektu
 
-Ten katalog zawiera końcową dokumentację projektu FPGA Audio Platform. Pliki
-opisują aktualny stan systemu, a nie historię branchy ani pull requestów.
 
 ## Zalecana kolejność czytania
 
