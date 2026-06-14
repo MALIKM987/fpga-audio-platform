@@ -82,10 +82,3 @@ realizuje sterowanie sprzętowe.
 | `0xA000..0xA005` | rejestry mailboxa UART |
 | `0xA100..0xA1FF` | ramka wejściowa z UART |
 | `0xA200..0xA2FF` | ramka wynikowa dla UART |
-
-## Dlaczego to jest CPU
-
-Mini CPU ma realny program counter, pobiera instrukcje z ROM, dekoduje opkody,
-wykonuje operacje ALU, load/store i skoki warunkowe. Nie jest to tylko FSM
-zaszyty w jednym module. Dzięki temu można testować programy CPU osobno i
-zmieniać zachowanie sterowania przez zmianę ROM.
