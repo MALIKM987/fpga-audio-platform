@@ -28,7 +28,7 @@ stop bits: 1
 clock: 27_000_000 Hz
 ```
 
-## Potwierdzone piny
+## Piny
 
 | Sygnał | Pin | Opis |
 | --- | ---: | --- |
