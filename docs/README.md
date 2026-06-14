@@ -1,7 +1,7 @@
 # Dokumentacja projektu
 
 
-## Zalecana kolejność czytania
+## Spis treści
 
 1. [requirements_and_functionality.md](requirements_and_functionality.md) -
    wymagania, zakres i ograniczenia.
