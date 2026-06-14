@@ -153,6 +153,12 @@ Analiza i poprawka zakresu dynamicznego fixed-point FFT/IFFT jest w:
 docs/fixed_point_scaling_and_saturation.md
 ```
 
+Kalibracja porównania ideal-float, modelu fixed-point i realnego FPGA jest w:
+
+```text
+docs/fpga_fixed_point_reference_calibration.md
+```
+
 ## Planowana architektura FFT/IFFT
 
 Moduły nowego kierunku zaimplementowane w obecnym etapie:
@@ -215,6 +221,9 @@ Moduły nowego kierunku zaimplementowane w obecnym etapie:
   granicznych, które wcześniej ujawniały przepełnienie forward FFT.
 - `tools/analyze_hardware_csv.py` jako lokalny analizator eksportów CSV z
   fizycznych testów UART.
+- `tools/compare_float_fixed_fpga.py` oraz
+  `tools/test_fpga_fixed_point_reference_calibration.py` jako narzędzia
+  kalibracji między idealnym modelem float, modelem fixed-point i realnym FPGA.
 - `tools/fft_reference_model.py` jako Pythonowy golden model matematyczny
   toru FFT -> spectral gain -> IFFT.
 - GitHub Actions uruchamiające testy Verilog dla pull requestów i pushy na

@@ -8,7 +8,13 @@ import sys
 from spectrum_lab_hardware_backend import (
     Gains,
     build_transfer_sequence,
+    float_gain_to_q2_14,
+    gain_was_clipped,
+    hardware_band_for_frequency,
+    hardware_gains_from_modifications,
+    hardware_operating_warnings,
     poll_status,
+    q2_14_to_float,
     run_frame,
 )
 from spectrum_lab_model import SignalComponent, SpectrumModification, simulate_spectrum_lab
@@ -134,6 +140,52 @@ def test_local_simulation_unaffected() -> bool:
     return len(result.input_int16.samples) == 256 and len(result.output_int16.samples) == 256
 
 
+def test_gain_q2_14_helpers() -> bool:
+    return (
+        float_gain_to_q2_14(0.5) == 8192
+        and float_gain_to_q2_14(1.0) == 16384
+        and float_gain_to_q2_14(2.0) == 32767
+        and float_gain_to_q2_14(4.0) == 32767
+        and gain_was_clipped(4.0)
+        and not gain_was_clipped(1.5)
+        and abs(q2_14_to_float(32767) - 1.99993896484375) < 1.0e-12
+    )
+
+
+def test_hardware_gain_mapping() -> bool:
+    gains = hardware_gains_from_modifications(
+        [
+            SpectrumModification(1000.0, 500.0, 1.5),
+            SpectrumModification(2700.0, 600.0, 0.5),
+            SpectrumModification(6200.0, 800.0, 1.0),
+        ]
+    )
+    return (
+        hardware_band_for_frequency(100.0) == "bass"
+        and hardware_band_for_frequency(1000.0) == "mid"
+        and hardware_band_for_frequency(6200.0) == "treble"
+        and gains.bass_gain == 16384
+        and gains.mid_gain == 8192
+        and gains.treble_gain == 16384
+    )
+
+
+def test_hardware_operating_warnings() -> bool:
+    warnings = hardware_operating_warnings(
+        [
+            SpectrumModification(1000.0, 500.0, 4.0),
+            SpectrumModification(2700.0, 600.0, 0.5),
+            SpectrumModification(30_000.0, 800.0, 1.0),
+        ]
+    )
+    joined = "\n".join(warnings)
+    return (
+        "gain 4" in joined
+        and "above Nyquist" in joined
+        and "hardware MID band" in joined
+    )
+
+
 def main() -> int:
     print("=== SPECTRUM LAB HARDWARE BACKEND TEST ===")
     report("transfer_sequence_shape", test_transfer_sequence_shape())
@@ -145,6 +197,9 @@ def main() -> int:
     report("payload_a5_5a_roundtrip", test_framing_bytes_in_payload())
     report("pyserial_not_required", test_pyserial_not_required_for_tests())
     report("local_simulation_unaffected", test_local_simulation_unaffected())
+    report("gain_q2_14_helpers", test_gain_q2_14_helpers())
+    report("hardware_gain_mapping", test_hardware_gain_mapping())
+    report("hardware_operating_warnings", test_hardware_operating_warnings())
 
     if ERRORS == 0:
         print("STATUS=PASS")

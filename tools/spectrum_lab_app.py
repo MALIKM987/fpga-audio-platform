@@ -30,7 +30,13 @@ from spectrum_lab_comparison import (
     build_frame_comparison,
     format_error_metrics,
 )
-from spectrum_lab_hardware_backend import Gains, run_frame
+from spectrum_lab_hardware_backend import (
+    Gains,
+    float_gain_to_q2_14,
+    hardware_gains_from_modifications,
+    hardware_operating_warnings,
+    run_frame,
+)
 from uart_transport import MockFpgaTransport, SerialTransport
 
 
@@ -265,25 +271,15 @@ class SpectrumLabApp(tk.Tk):
         return sample_rate, frame_size
 
     def _gain_to_q2_14(self, gain: float) -> int:
-        value = int(round(float(gain) * 16384.0))
-        return max(-32768, min(32767, value))
+        return float_gain_to_q2_14(gain)
 
     def _hardware_gains(self, modifications: list[SpectrumModification]) -> Gains:
-        bass = 16384
-        mid = 16384
-        treble = 16384
-
-        for modification in modifications:
-            gain = self._gain_to_q2_14(modification.gain)
-            center = modification.center_frequency_hz
-            if center <= 187.5:
-                bass = gain
-            elif center <= 3937.5:
-                mid = gain
-            else:
-                treble = gain
-
-        return Gains(bass, mid, treble)
+        sample_rate, frame_size = self._settings()
+        return hardware_gains_from_modifications(
+            modifications,
+            sample_rate_hz=sample_rate,
+            frame_size=frame_size,
+        )
 
     def _run_backend_comparison(
         self,
@@ -394,6 +390,13 @@ class SpectrumLabApp(tk.Tk):
             warnings.append("input clipping")
         if self.result.output_int16.clipped:
             warnings.append("output clipping")
+        warnings.extend(
+            hardware_operating_warnings(
+                modifications,
+                sample_rate_hz=float(self.sample_rate_var.get()),
+                frame_size=frame_size,
+            )
+        )
         warning_text = ", ".join(warnings) if warnings else "no clipping"
 
         comparison_lines = [

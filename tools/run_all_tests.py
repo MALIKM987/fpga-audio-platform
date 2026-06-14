@@ -26,6 +26,13 @@ PYTHON_TESTS = [
         "command": [sys.executable, "tools/test_fixed_point_amplitude_sweep.py"],
     },
     {
+        "name": "fpga_fixed_point_reference_calibration",
+        "command": [
+            sys.executable,
+            "tools/test_fpga_fixed_point_reference_calibration.py",
+        ],
+    },
+    {
         "name": "spectrum_lab_model",
         "command": [sys.executable, "tools/test_spectrum_lab_model.py"],
     },
