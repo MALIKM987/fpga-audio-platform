@@ -93,7 +93,11 @@ flowchart LR
 PC <-->|"115200 8N1"| USB <-->|"uart_rx / uart_tx"| Board
 ```
 
-## Diagram UML zależności modułów
+## UML-style structural dependency diagram
+
+Ten diagram jest dokumentacyjnym widokiem strukturalnym. Nie jest ścisłą
+hierarchią klas obiektowych dla całego projektu. Część elementów to klasy lub
+moduły Pythona, a część to moduły RTL albo bloki architektoniczne.
 
 ```mermaid
 classDiagram
@@ -137,6 +141,57 @@ classDiagram
     MiniCPU --> FftAcceleratorMmio
     FftAcceleratorMmio --> FftIfftPipeline
 ```
+
+## Use-case diagram
+
+```mermaid
+flowchart LR
+    User["Użytkownik"]
+    GUI["PC Spectrum Lab"]
+    Mock["Uruchom test mock FPGA"]
+    Serial["Uruchom test Serial FPGA"]
+    Local["Porównaj z lokalną symulacją"]
+    CSV["Eksportuj CSV"]
+    HW["Przetwórz ramkę na FPGA"]
+
+    User --> GUI
+    GUI --> Mock
+    GUI --> Serial
+    GUI --> Local
+    GUI --> CSV
+    Serial --> HW
+```
+
+## Activity diagram jednej transakcji ramki
+
+```mermaid
+flowchart TD
+    A["Wprowadź lub wybierz sygnał"]
+    B["Wybierz backend"]
+    C["Wyślij SET_GAINS"]
+    D["Wyślij WRITE_FRAME_CHUNK x8"]
+    E["Wyślij RUN_FRAME"]
+    F["Poll GET_STATUS"]
+    G{"DONE?"}
+    H["Odczytaj READ_RESULT_CHUNK x8"]
+    I["Policz metryki i narysuj wykres"]
+    J["Zgłoś błąd/timeout"]
+
+    A --> B --> C --> D --> E --> F --> G
+    G -- tak --> H --> I
+    G -- błąd albo timeout --> J
+    G -- nie --> F
+```
+
+## Dlaczego CPU-owned flow
+
+UART nie steruje bezpośrednio akceleratorem, ponieważ:
+
+- akcelerator ma jednego właściciela sterowania,
+- program CPU można rozszerzać bez zmiany protokołu transportowego,
+- UART pozostaje warstwą komunikacji i mailboxa,
+- testy łatwiej rozdzielają błędy protokołu od błędów DSP,
+- debugowanie jest czytelniejsze: PC wysyła request, CPU wykonuje procedurę.
 
 ## Granice aktualnej architektury
 
