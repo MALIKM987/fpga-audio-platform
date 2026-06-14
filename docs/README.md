@@ -38,6 +38,3 @@
 | `design_patterns.md` | Strategy, Command, Adapter, Facade, FSM, MMIO |
 | `maintenance_and_deployment.md` | PR workflow, testy, bitstream, reprodukcja |
 | `bibliography.md` | książki, dokumentacje i materiały kursowe |
-
-Stare dokumenty etapowe zostały skonsolidowane do powyższej struktury. Historia
-rozwoju pozostaje dostępna w historii Git.
