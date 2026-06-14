@@ -1,7 +1,6 @@
 # Mini CPU
 
-Projekt używa własnego mini CPU soft-core napisanego w Verilogu. Nie jest to
-ARM, RISC-V, STM32 ani gotowy procesor zewnętrzny. Jest to prosty procesor
+Projekt używa własnego mini CPU soft-core napisanego w Verilogu. Jest to prosty procesor
 edukacyjny z licznikiem programu, rejestrami, instrukcjami load/store,
 skokami i interfejsem do magistrali pamięciowo-mapowanej.
 
