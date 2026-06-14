@@ -12,6 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import time
 
+from spectrum_lab_model import SpectrumModification
 from uart_frame_protocol import (
     CMD_ERROR,
     CMD_PONG,
@@ -42,6 +43,14 @@ from uart_transport import (
 
 DEFAULT_TIMEOUT_S = 2.0
 DEFAULT_POLL_INTERVAL_S = 0.01
+Q2_14_SCALE = 16_384
+HARDWARE_GAIN_MIN_Q2_14 = -32_768
+HARDWARE_GAIN_MAX_Q2_14 = 32_767
+HARDWARE_GAIN_MIN_FLOAT = HARDWARE_GAIN_MIN_Q2_14 / float(Q2_14_SCALE)
+HARDWARE_GAIN_MAX_FLOAT = HARDWARE_GAIN_MAX_Q2_14 / float(Q2_14_SCALE)
+
+RTL_BASS_MAX_BIN = 1
+RTL_MID_MAX_BIN = 21
 
 
 class HardwareBackendError(RuntimeError):
@@ -64,6 +73,117 @@ class HardwareFrameResult:
     status: int
     samples: list[int]
     status_history: list[int]
+
+
+def q2_14_to_float(value: int) -> float:
+    """Convert a signed 16-bit Q2.14 gain value to float."""
+
+    signed_value = int(value)
+    if signed_value > 0x7FFF:
+        signed_value -= 0x10000
+    return signed_value / float(Q2_14_SCALE)
+
+
+def float_gain_to_q2_14(gain: float) -> int:
+    """Encode a GUI gain as the signed 16-bit Q2.14 value used by FPGA."""
+
+    raw_value = int(round(float(gain) * float(Q2_14_SCALE)))
+    return max(HARDWARE_GAIN_MIN_Q2_14, min(HARDWARE_GAIN_MAX_Q2_14, raw_value))
+
+
+def gain_was_clipped(gain: float) -> bool:
+    """Return True when a GUI gain cannot be represented by signed Q2.14."""
+
+    raw_value = int(round(float(gain) * float(Q2_14_SCALE)))
+    return raw_value < HARDWARE_GAIN_MIN_Q2_14 or raw_value > HARDWARE_GAIN_MAX_Q2_14
+
+
+def hardware_band_for_frequency(
+    frequency_hz: float,
+    sample_rate_hz: float = 48_000.0,
+    frame_size: int = FRAME_SAMPLES,
+) -> str:
+    """Map a GUI center frequency to the current RTL BASS/MID/TREBLE bands."""
+
+    if sample_rate_hz <= 0.0 or frame_size <= 0:
+        raise ValueError("sample_rate_hz and frame_size must be positive")
+
+    bin_hz = sample_rate_hz / float(frame_size)
+    effective_bin = int(round(max(0.0, float(frequency_hz)) / bin_hz))
+
+    if effective_bin <= RTL_BASS_MAX_BIN:
+        return "bass"
+    if effective_bin <= RTL_MID_MAX_BIN:
+        return "mid"
+    return "treble"
+
+
+def hardware_gains_from_modifications(
+    modifications: list[SpectrumModification] | tuple[SpectrumModification, ...],
+    sample_rate_hz: float = 48_000.0,
+    frame_size: int = FRAME_SAMPLES,
+) -> Gains:
+    """Collapse GUI modifications to the current three hardware band gains."""
+
+    bass = Q2_14_SCALE
+    mid = Q2_14_SCALE
+    treble = Q2_14_SCALE
+
+    for modification in modifications:
+        gain = float_gain_to_q2_14(modification.gain)
+        band = hardware_band_for_frequency(
+            modification.center_frequency_hz,
+            sample_rate_hz=sample_rate_hz,
+            frame_size=frame_size,
+        )
+        if band == "bass":
+            bass = gain
+        elif band == "mid":
+            mid = gain
+        else:
+            treble = gain
+
+    return Gains(bass, mid, treble)
+
+
+def hardware_operating_warnings(
+    modifications: list[SpectrumModification] | tuple[SpectrumModification, ...],
+    sample_rate_hz: float = 48_000.0,
+    frame_size: int = FRAME_SAMPLES,
+) -> list[str]:
+    """Return concise warnings for GUI settings that differ from FPGA limits."""
+
+    warnings: list[str] = []
+    nyquist = sample_rate_hz / 2.0
+    seen_bands: dict[str, int] = {}
+
+    for modification in modifications:
+        if modification.center_frequency_hz > nyquist:
+            warnings.append(
+                f"frequency {modification.center_frequency_hz:g} Hz is above Nyquist"
+            )
+        if gain_was_clipped(modification.gain):
+            warnings.append(
+                "gain "
+                f"{modification.gain:g} is clipped to signed Q2.14 range "
+                f"{HARDWARE_GAIN_MIN_FLOAT:.3f}..{HARDWARE_GAIN_MAX_FLOAT:.3f}"
+            )
+
+        band = hardware_band_for_frequency(
+            modification.center_frequency_hz,
+            sample_rate_hz=sample_rate_hz,
+            frame_size=frame_size,
+        )
+        seen_bands[band] = seen_bands.get(band, 0) + 1
+
+    for band, count in sorted(seen_bands.items()):
+        if count > 1:
+            warnings.append(
+                f"{count} modifications map to hardware {band.upper()} band; "
+                "only the last gain is sent to FPGA"
+            )
+
+    return warnings
 
 
 def decode_status_bits(status: int) -> dict[str, bool]:
