@@ -20,8 +20,8 @@ module ifft_accel_wrapper #(
 );
 
     // Thin IFFT wrapper for the inverse transform path.
-    // This uses the shared radix-2 core in inverse mode, but the core still
-    // does not apply 1/N normalization. Scaling is a known next-step TODO.
+    // This uses the shared radix-2 core in inverse mode. The core applies
+    // 1/N normalization for N=256 as one arithmetic right shift per stage.
     fft_radix2_core #(
         .FFT_SIZE(FFT_SIZE),
         .DATA_WIDTH(DATA_WIDTH),

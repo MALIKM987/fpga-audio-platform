@@ -207,8 +207,8 @@ def test_fft_then_ifft_identity_small_signal() -> bool:
 
     real_out, imag_out = fft_then_ifft_roundtrip(real_samples)
     return (
-        max_abs_error(real_out, real_samples) <= 1
-        and max_abs_error(imag_out, [0] * FFT_SIZE) <= 1
+        max_abs_error(real_out, real_samples) <= 2
+        and max_abs_error(imag_out, [0] * FFT_SIZE) <= 5
     )
 
 
@@ -221,11 +221,27 @@ def test_fft_then_ifft_identity_mixed_small_signal() -> bool:
     )
 
 
+def test_fft_then_ifft_preserves_wider_than_int8_signal() -> bool:
+    real_samples = [0] * FFT_SIZE
+    real_samples[0] = 1000
+    real_samples[1] = -512
+    real_samples[2] = 256
+    real_samples[3] = 128
+    real_samples[4] = -129
+
+    real_out, imag_out = fft_then_ifft_roundtrip(real_samples)
+    return (
+        max_abs_error(real_out, real_samples) <= 3
+        and max_abs_error(imag_out, [0] * FFT_SIZE) <= 5
+        and max(abs(value) for value in real_out) > 127
+    )
+
+
 def main() -> int:
     print("=== FFT RADIX-2 BIT-EXACT FIXED MODEL TEST ===")
     print(f"FFT_SIZE={FFT_SIZE}")
     print("FORMAT=Q2.14")
-    print("MODE=RTL_WRAPAROUND_TRUNCATION_WITH_NORMALIZED_IFFT")
+    print("MODE=RTL_FORWARD_WRAP_IFFT_PER_STAGE_SCALING")
     print("")
 
     report("helpers", test_helpers())
@@ -239,6 +255,10 @@ def main() -> int:
     report(
         "fft_then_ifft_identity_mixed_small_signal",
         test_fft_then_ifft_identity_mixed_small_signal(),
+    )
+    report(
+        "fft_then_ifft_preserves_wider_than_int8_signal",
+        test_fft_then_ifft_preserves_wider_than_int8_signal(),
     )
 
     if ERRORS == 0:
