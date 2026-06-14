@@ -10,11 +10,14 @@
 // this standalone core: it reads A/B operands, reads the matching twiddle
 // factor, multiplies B by W, computes A+B*W and A-B*W, and writes both results
 // back to internal memory. Twiddle sign follows inverse_latched. This first
-// version uses simple wraparound/truncation after add/sub; scaling and
+// version uses simple wraparound/truncation after add/sub for forward FFT;
 // saturation can be improved later.
 //
-// In inverse mode, the output stage applies 1/N normalization for N=256 by
-// arithmetic right-shifting by 8 bits. Forward FFT mode is not normalized.
+// In inverse mode, each butterfly stage applies one arithmetic right shift.
+// For N=256 this gives the required 1/N normalization after 8 stages while
+// preserving the high bits before the value is stored back into 16-bit memory.
+// This avoids reducing the final output to the sign-extended high byte of an
+// already wrapped 16-bit value.
 
 module fft_radix2_core #(
     parameter integer FFT_SIZE    = 256,
@@ -149,6 +152,18 @@ module fft_radix2_core #(
     assign out_b_real_next = a_real_ext - b_tw_real_wire_ext;
     assign out_b_imag_next = a_imag_ext - b_tw_imag_wire_ext;
 
+    function signed [DATA_WIDTH-1:0] butterfly_store_value;
+        input signed [DATA_WIDTH:0] value;
+        input inverse_mode;
+        begin
+            if (inverse_mode) begin
+                butterfly_store_value = value >>> 1;
+            end else begin
+                butterfly_store_value = value[DATA_WIDTH-1:0];
+            end
+        end
+    endfunction
+
     always @(posedge clk) begin
         if (rst) begin
             state <= STATE_IDLE;
@@ -264,15 +279,28 @@ module fft_radix2_core #(
                     busy <= 1'b1;
                     // Third micro-step: B_twiddled = B * W. complex_mult is
                     // combinational, so this state latches its scaled Q2.14
-                    // outputs and both butterfly results for writeback. The
-                    // DATA_WIDTH+1 add/sub results are truncated back to
-                    // DATA_WIDTH here, so overflow wraps in this first version.
+                    // outputs and both butterfly results for writeback. Forward
+                    // FFT truncates the DATA_WIDTH+1 add/sub result back to
+                    // DATA_WIDTH. IFFT scales by 1 bit per stage before storing
+                    // to avoid losing the bits needed for 1/N normalization.
                     b_tw_real_reg <= b_tw_real_wire;
                     b_tw_imag_reg <= b_tw_imag_wire;
-                    out_a_real_reg <= out_a_real_next[DATA_WIDTH-1:0];
-                    out_a_imag_reg <= out_a_imag_next[DATA_WIDTH-1:0];
-                    out_b_real_reg <= out_b_real_next[DATA_WIDTH-1:0];
-                    out_b_imag_reg <= out_b_imag_next[DATA_WIDTH-1:0];
+                    out_a_real_reg <= butterfly_store_value(
+                        out_a_real_next,
+                        inverse_latched
+                    );
+                    out_a_imag_reg <= butterfly_store_value(
+                        out_a_imag_next,
+                        inverse_latched
+                    );
+                    out_b_real_reg <= butterfly_store_value(
+                        out_b_real_next,
+                        inverse_latched
+                    );
+                    out_b_imag_reg <= butterfly_store_value(
+                        out_b_imag_next,
+                        inverse_latched
+                    );
                     state <= STATE_BUTTERFLY_WRITEBACK_A;
                 end
 
@@ -318,13 +346,8 @@ module fft_radix2_core #(
                     busy <= 1'b1;
                     out_valid <= 1'b1;
                     out_index <= output_count[INDEX_WIDTH-1:0];
-                    if (inverse_latched) begin
-                        real_out <= real_mem[output_count[INDEX_WIDTH-1:0]] >>> 8;
-                        imag_out <= imag_mem[output_count[INDEX_WIDTH-1:0]] >>> 8;
-                    end else begin
-                        real_out <= real_mem[output_count[INDEX_WIDTH-1:0]];
-                        imag_out <= imag_mem[output_count[INDEX_WIDTH-1:0]];
-                    end
+                    real_out <= real_mem[output_count[INDEX_WIDTH-1:0]];
+                    imag_out <= imag_mem[output_count[INDEX_WIDTH-1:0]];
 
                     if (output_count == FFT_SIZE - 1) begin
                         output_count <= output_count + 1'b1;

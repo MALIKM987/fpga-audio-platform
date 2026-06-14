@@ -75,6 +75,7 @@ module uart_frame_buffer_backend_tb;
     integer errors = 0;
     integer i;
     integer wait_count;
+    integer canary_ok;
     reg [15:0] cpu_read_value;
 
     assign packet_payload_rd_data = payload_mem[packet_payload_rd_addr];
@@ -475,6 +476,43 @@ module uart_frame_buffer_backend_tb;
                       captured[8] == 8'd2 &&
                       payload_sample(4) == 16'sd111 &&
                       payload_sample(6) == -16'sd222);
+
+        cpu_write(FRAME_RESULT_BASE + 16'd0, 16'sd0);
+        cpu_write(FRAME_RESULT_BASE + 16'd1, 16'sd1);
+        cpu_write(FRAME_RESULT_BASE + 16'd2, -16'sd1);
+        cpu_write(FRAME_RESULT_BASE + 16'd3, 16'sd127);
+        cpu_write(FRAME_RESULT_BASE + 16'd4, 16'sd128);
+        cpu_write(FRAME_RESULT_BASE + 16'd5, 16'sd255);
+        cpu_write(FRAME_RESULT_BASE + 16'd6, 16'sd256);
+        cpu_write(FRAME_RESULT_BASE + 16'd7, -16'sd128);
+        cpu_write(FRAME_RESULT_BASE + 16'd8, -16'sd129);
+        cpu_write(FRAME_RESULT_BASE + 16'd9, 16'sh7FFF);
+        cpu_write(FRAME_RESULT_BASE + 16'd10, 16'sh8000);
+        cpu_write(FRAME_STATUS, STATUS_INPUT_LOADED | STATUS_DONE);
+
+        clear_payload();
+        payload_mem[0] = 8'h00;
+        payload_mem[1] = 8'h00;
+        payload_mem[2] = 8'd11;
+        send_packet(CMD_READ_RESULT_CHUNK, 8'h0C, 16'd3);
+        wait_for_response(140);
+        canary_ok =
+            response_packet_ok(RSP_RESULT_CHUNK, 8'h0C, 26) &&
+            captured[6] == 8'h00 &&
+            captured[7] == 8'h00 &&
+            captured[8] == 8'd11 &&
+            payload_sample(4) == 16'sd0 &&
+            payload_sample(6) == 16'sd1 &&
+            payload_sample(8) == -16'sd1 &&
+            payload_sample(10) == 16'sd127 &&
+            payload_sample(12) == 16'sd128 &&
+            payload_sample(14) == 16'sd255 &&
+            payload_sample(16) == 16'sd256 &&
+            payload_sample(18) == -16'sd128 &&
+            payload_sample(20) == -16'sd129 &&
+            payload_sample(22) == 16'sh7FFF &&
+            payload_sample(24) == 16'sh8000;
+        report_result("read_result_preserves_full_int16", canary_ok);
 
         send_packet(CMD_GET_STATUS, 8'h09, 16'd0);
         wait_for_response(60);

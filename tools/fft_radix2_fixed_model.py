@@ -4,8 +4,10 @@
 This model mirrors the current RTL behavior of rtl/dsp/fft_radix2_core.v.
 It is intentionally not an ideal floating-point FFT reference.  It models the
 Q2.14 twiddle ROM, the combinational complex multiplier, bit-reversed loading,
-radix-2 butterfly address generation, 16-bit wraparound/truncation, and inverse
-1/N output normalization for N=256.
+radix-2 butterfly address generation, forward 16-bit wraparound/truncation, and
+inverse per-stage 1-bit scaling. For N=256, the 8 inverse stages give the
+required 1/N normalization without reducing the final output to an int8-like
+range.
 """
 
 from __future__ import annotations
@@ -227,18 +229,25 @@ def fft_radix2_core_fixed_model(
                 tw_imag,
             )
 
-            out_a_real = wrap_int16(a_real + b_tw_real)
-            out_a_imag = wrap_int16(a_imag + b_tw_imag)
-            out_b_real = wrap_int16(a_real - b_tw_real)
-            out_b_imag = wrap_int16(a_imag - b_tw_imag)
+            out_a_real_full = a_real + b_tw_real
+            out_a_imag_full = a_imag + b_tw_imag
+            out_b_real_full = a_real - b_tw_real
+            out_b_imag_full = a_imag - b_tw_imag
+
+            if inverse and normalize_inverse:
+                out_a_real = wrap_int16(out_a_real_full >> 1)
+                out_a_imag = wrap_int16(out_a_imag_full >> 1)
+                out_b_real = wrap_int16(out_b_real_full >> 1)
+                out_b_imag = wrap_int16(out_b_imag_full >> 1)
+            else:
+                out_a_real = wrap_int16(out_a_real_full)
+                out_a_imag = wrap_int16(out_a_imag_full)
+                out_b_real = wrap_int16(out_b_real_full)
+                out_b_imag = wrap_int16(out_b_imag_full)
 
             real_mem[addr_a] = out_a_real
             imag_mem[addr_a] = out_a_imag
             real_mem[addr_b] = out_b_real
             imag_mem[addr_b] = out_b_imag
-
-    if inverse and normalize_inverse:
-        real_mem = [wrap_int16(value >> INDEX_WIDTH) for value in real_mem]
-        imag_mem = [wrap_int16(value >> INDEX_WIDTH) for value in imag_mem]
 
     return list(real_mem), list(imag_mem)
