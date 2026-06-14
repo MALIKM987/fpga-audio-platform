@@ -1,6 +1,5 @@
 # Dokumentacja projektu
 
-
 ## Spis treści
 
 1. [requirements_and_functionality.md](requirements_and_functionality.md) -
@@ -16,7 +15,7 @@
 9. [tang_nano_hardware.md](tang_nano_hardware.md) - uruchomienie na Tang Nano.
 10. [testing_and_validation.md](testing_and_validation.md) - testy i raport
     walidacji.
-11. [design_patterns.md](design_patterns.md) - wzorce projektowe użyte w kodzie.
+11. [design_patterns.md](design_patterns.md) - wzorce projektowe i architektoniczne.
 12. [maintenance_and_deployment.md](maintenance_and_deployment.md) - utrzymanie,
     workflow GitHub i budowanie bitstreamu.
 13. [bibliography.md](bibliography.md) - bibliografia i źródła.
@@ -25,12 +24,12 @@
 
 | Dokument | Zawartość |
 | --- | --- |
-| `architecture.md` | diagram komponentów, data-flow, deployment |
+| `architecture.md` | diagram komponentów, data-flow, deployment, use-case |
 | `requirements_and_functionality.md` | wymagania funkcjonalne i niefunkcjonalne |
-| `problem_analysis.md` | ramki próbek, FFT, IFFT, fixed-point |
+| `problem_analysis.md` | ramki próbek, DFT/FFT/IFFT, leakage, fixed-point |
 | `pc_application.md` | GUI, backendy, presety, CSV |
-| `uart_protocol.md` | format ramek, komendy, statusy |
-| `mini_cpu.md` | soft-core CPU, ROM programu, service loop |
+| `uart_protocol.md` | format ramek, komendy, payloady, statusy |
+| `mini_cpu.md` | soft-core CPU, opkody, ROM programu, service loop |
 | `fft_dsp_accelerator.md` | pipeline FFT/IFFT, BASS/MID/TREBLE, MMIO |
 | `fixed_point_model.md` | signed int16, Q2.14, saturacja |
 | `tang_nano_hardware.md` | top, piny, Gowin EDA, test sprzętowy |
@@ -38,3 +37,14 @@
 | `design_patterns.md` | Strategy, Command, Adapter, Facade, FSM, MMIO |
 | `maintenance_and_deployment.md` | PR workflow, testy, bitstream, reprodukcja |
 | `bibliography.md` | książki, dokumentacje i materiały kursowe |
+
+## Checklist kompletności raportu
+
+- Opisano cel i zakres systemu.
+- Opisano architekturę PC -> UART -> mini CPU -> FFT/IFFT -> UART -> PC.
+- Opisano protokół UART z payloadami i przykładową ramką.
+- Opisano własny mini CPU, jego instrukcje i ograniczenia.
+- Opisano akcelerator FFT/IFFT jako przetwarzanie ramkowe.
+- Opisano model fixed-point i ograniczenia względem modelu float.
+- Opisano testy automatyczne i bring-up na Tang Nano.
+- Wskazano elementy future work: I2S, PCM1808/PCM5102A i dalszy hardware audio.
