@@ -40,10 +40,19 @@ module spectral_processor #(
         input signed [DATA_WIDTH-1:0] value;
         input signed [GAIN_WIDTH-1:0] gain;
         reg signed [DATA_WIDTH+GAIN_WIDTH-1:0] product;
+        reg signed [DATA_WIDTH+GAIN_WIDTH-1:0] scaled;
+        reg [GAIN_WIDTH:0] guard_bits;
         begin
             product = value * gain;
-            // Brak saturacji w tym etapie: wynik po Q2.14 jest obcinany do DATA_WIDTH.
-            apply_q2_14_gain = product >>> 14;
+            scaled = product >>> 14;
+            guard_bits = scaled[DATA_WIDTH+GAIN_WIDTH-1:DATA_WIDTH-1];
+            if (guard_bits == {(GAIN_WIDTH+1){scaled[DATA_WIDTH-1]}}) begin
+                apply_q2_14_gain = scaled[DATA_WIDTH-1:0];
+            end else if (scaled[DATA_WIDTH+GAIN_WIDTH-1]) begin
+                apply_q2_14_gain = {1'b1, {(DATA_WIDTH-1){1'b0}}};
+            end else begin
+                apply_q2_14_gain = {1'b0, {(DATA_WIDTH-1){1'b1}}};
+            end
         end
     endfunction
 

@@ -7,8 +7,6 @@ import csv
 from pathlib import Path
 
 from fft_reference_model import (
-    BAND_BASS,
-    BAND_MID,
     DEFAULT_BASS_GAIN,
     DEFAULT_MID_GAIN,
     DEFAULT_TREBLE_GAIN,
@@ -16,9 +14,8 @@ from fft_reference_model import (
     generate_test_frame,
     process_frame_reference,
     saturate_int16,
-    select_band,
 )
-from fft_radix2_fixed_model import fft_radix2_core_fixed_model, wrap_int16
+from fft_radix2_fixed_model import fft_ifft_pipeline_fixed_model
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -42,36 +39,15 @@ def write_csv(path: Path, samples: list[int]) -> None:
             writer.writerow([index, sample])
 
 
-def apply_current_rtl_q2_14(sample: int, gain: int) -> int:
-    # Mirrors spectral_processor.v: product >>> 14 assigned back to 16 bits.
-    return wrap_int16((int(sample) * int(gain)) >> 14)
-
-
 def rtl_fft_ifft_normalized_model(samples: list[int], size: int = FFT_SIZE) -> list[int]:
-    """Model current RTL: FFT core, spectral gain, normalized IFFT core."""
+    """Model current RTL pipeline: wider FFT bins, spectral gain, IFFT."""
 
-    zero_imag = [0] * size
-    fft_real, fft_imag = fft_radix2_core_fixed_model(samples[:size], zero_imag)
-    spectral_real: list[int] = []
-    spectral_imag: list[int] = []
-
-    for index, (real_sample, imag_sample) in enumerate(zip(fft_real, fft_imag)):
-        band = select_band(index, size)
-        if band == BAND_BASS:
-            gain = DEFAULT_BASS_GAIN
-        elif band == BAND_MID:
-            gain = DEFAULT_MID_GAIN
-        else:
-            gain = DEFAULT_TREBLE_GAIN
-        spectral_real.append(apply_current_rtl_q2_14(real_sample, gain))
-        spectral_imag.append(apply_current_rtl_q2_14(imag_sample, gain))
-
-    ifft_real, _ifft_imag = fft_radix2_core_fixed_model(
-        spectral_real,
-        spectral_imag,
-        inverse=True,
+    return fft_ifft_pipeline_fixed_model(
+        samples[:size],
+        bass_gain=DEFAULT_BASS_GAIN,
+        mid_gain=DEFAULT_MID_GAIN,
+        treble_gain=DEFAULT_TREBLE_GAIN,
     )
-    return ifft_real
 
 
 def generate_vectors() -> int:

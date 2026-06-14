@@ -241,7 +241,7 @@ def main() -> int:
     print("=== FFT RADIX-2 BIT-EXACT FIXED MODEL TEST ===")
     print(f"FFT_SIZE={FFT_SIZE}")
     print("FORMAT=Q2.14")
-    print("MODE=RTL_FORWARD_WRAP_IFFT_PER_STAGE_SCALING")
+    print("MODE=RTL_SATURATING_WRITEBACK_IFFT_PER_STAGE_SCALING")
     print("")
 
     report("helpers", test_helpers())

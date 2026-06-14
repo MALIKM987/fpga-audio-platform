@@ -147,6 +147,12 @@ Procedura potwierdzenia pinów UART dla fizycznego testu Tang Nano jest w:
 docs/tang_uart_pin_confirmation.md
 ```
 
+Analiza i poprawka zakresu dynamicznego fixed-point FFT/IFFT jest w:
+
+```text
+docs/fixed_point_scaling_and_saturation.md
+```
+
 ## Planowana architektura FFT/IFFT
 
 Moduły nowego kierunku zaimplementowane w obecnym etapie:
@@ -191,6 +197,10 @@ Moduły nowego kierunku zaimplementowane w obecnym etapie:
   CPU czyta mailbox UART, kopiuje ramkę do `fft_accelerator_mmio`, startuje
   FFT/IFFT, polluje status, zapisuje wynik z powrotem do mailboxa i wraca do
   oczekiwania na kolejne `RUN_FRAME` bez resetu.
+- `fft_ifft_pipeline.v` używa szerszej wewnętrznej ścieżki fixed-point dla
+  FFT/IFFT i saturuje wynik z powrotem do signed 16-bit na wyjściu.
+- `complex_mult.v`, `spectral_processor.v` i `fft_radix2_core.v` saturują
+  krytyczne zawężenia wyników zamiast cicho zawijać przepełnienia.
 - `rtl/top/tang_cpu_owned_frame_uart_top.v` jako top integrujący bitowy UART,
   parser/formatter ramek, mailbox UART i `mini_cpu_uart_frame_system` bez
   zgadywania pinów UART w constraints.
@@ -201,6 +211,10 @@ Moduły nowego kierunku zaimplementowane w obecnym etapie:
 - `tools/spectrum_lab_comparison.py` jako helper porównujący wynik lokalnej
   symulacji z wynikiem backendu FPGA oraz liczący `max abs`, `mean abs` i
   `RMS error`.
+- `tools/test_fixed_point_amplitude_sweep.py` jako regresja dla amplitud
+  granicznych, które wcześniej ujawniały przepełnienie forward FFT.
+- `tools/analyze_hardware_csv.py` jako lokalny analizator eksportów CSV z
+  fizycznych testów UART.
 - `tools/fft_reference_model.py` jako Pythonowy golden model matematyczny
   toru FFT -> spectral gain -> IFFT.
 - GitHub Actions uruchamiające testy Verilog dla pull requestów i pushy na
@@ -208,7 +222,7 @@ Moduły nowego kierunku zaimplementowane w obecnym etapie:
 
 Moduły nadal oznaczone jako TODO:
 
-- saturacja i dalsze skalowanie fixed-point,
+- dalsza optymalizacja skalowania fixed-point po kolejnych testach sprzętowych,
 - integracja Gowin FFT IP,
 - fizyczny I2S,
 - potwierdzone piny UART i osobny wariant constraints Gowin dla topu UART,
@@ -339,7 +353,7 @@ Niezaimplementowane jeszcze:
 - Stabilny tor wejsciowy PCM1808 -> `i2s_rx_stereo`.
 - Pelny BYPASS ADC -> FPGA -> DAC.
 - Pelne przypisanie pinow dla PCM1808/PCM5102A.
-- Saturacja i dalsze skalowanie fixed-point.
+- Dalsza walidacja zakresu fixed-point na sprzęcie.
 - Gowin FFT IP.
 - AXI-Lite.
 - UART bridge do banku rejestrów.

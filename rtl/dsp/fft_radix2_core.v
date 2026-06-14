@@ -10,8 +10,9 @@
 // this standalone core: it reads A/B operands, reads the matching twiddle
 // factor, multiplies B by W, computes A+B*W and A-B*W, and writes both results
 // back to internal memory. Twiddle sign follows inverse_latched. This first
-// version uses simple wraparound/truncation after add/sub for forward FFT;
-// saturation can be improved later.
+// version saturates butterfly writeback to DATA_WIDTH instead of silently
+// wrapping. The surrounding pipeline can instantiate the core with a wider
+// internal DATA_WIDTH while keeping the external sample format at int16.
 //
 // In inverse mode, each butterfly stage applies one arithmetic right shift.
 // For N=256 this gives the required 1/N normalization after 8 stages while
@@ -152,15 +153,32 @@ module fft_radix2_core #(
     assign out_b_real_next = a_real_ext - b_tw_real_wire_ext;
     assign out_b_imag_next = a_imag_ext - b_tw_imag_wire_ext;
 
+    function signed [DATA_WIDTH-1:0] saturate_butterfly_value;
+        input signed [DATA_WIDTH:0] value;
+        begin
+            if (value[DATA_WIDTH] != value[DATA_WIDTH-1]) begin
+                if (value[DATA_WIDTH]) begin
+                    saturate_butterfly_value = {1'b1, {(DATA_WIDTH-1){1'b0}}};
+                end else begin
+                    saturate_butterfly_value = {1'b0, {(DATA_WIDTH-1){1'b1}}};
+                end
+            end else begin
+                saturate_butterfly_value = value[DATA_WIDTH-1:0];
+            end
+        end
+    endfunction
+
     function signed [DATA_WIDTH-1:0] butterfly_store_value;
         input signed [DATA_WIDTH:0] value;
         input inverse_mode;
+        reg signed [DATA_WIDTH:0] scaled_value;
         begin
             if (inverse_mode) begin
-                butterfly_store_value = value >>> 1;
+                scaled_value = value >>> 1;
             end else begin
-                butterfly_store_value = value[DATA_WIDTH-1:0];
+                scaled_value = value;
             end
+            butterfly_store_value = saturate_butterfly_value(scaled_value);
         end
     endfunction
 
@@ -280,9 +298,10 @@ module fft_radix2_core #(
                     // Third micro-step: B_twiddled = B * W. complex_mult is
                     // combinational, so this state latches its scaled Q2.14
                     // outputs and both butterfly results for writeback. Forward
-                    // FFT truncates the DATA_WIDTH+1 add/sub result back to
+                    // FFT narrows the DATA_WIDTH+1 add/sub result back to
                     // DATA_WIDTH. IFFT scales by 1 bit per stage before storing
                     // to avoid losing the bits needed for 1/N normalization.
+                    // Both paths saturate instead of wrapping.
                     b_tw_real_reg <= b_tw_real_wire;
                     b_tw_imag_reg <= b_tw_imag_wire;
                     out_a_real_reg <= butterfly_store_value(

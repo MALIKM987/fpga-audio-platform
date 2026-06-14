@@ -4,10 +4,9 @@
 This model mirrors the current RTL behavior of rtl/dsp/fft_radix2_core.v.
 It is intentionally not an ideal floating-point FFT reference.  It models the
 Q2.14 twiddle ROM, the combinational complex multiplier, bit-reversed loading,
-radix-2 butterfly address generation, forward 16-bit wraparound/truncation, and
-inverse per-stage 1-bit scaling. For N=256, the 8 inverse stages give the
-required 1/N normalization without reducing the final output to an int8-like
-range.
+radix-2 butterfly address generation, saturating butterfly writeback, and
+inverse per-stage 1-bit scaling. The project pipeline uses a wider internal FFT
+width and narrows back to int16 only at the final output.
 """
 
 from __future__ import annotations
@@ -15,6 +14,7 @@ from __future__ import annotations
 
 FFT_SIZE = 256
 DATA_WIDTH = 16
+PIPELINE_INTERNAL_WIDTH = 24
 INDEX_WIDTH = 8
 FRAC_BITS = 14
 Q2_14_ONE = 1 << FRAC_BITS
@@ -112,6 +112,32 @@ def wrap_int16(value: int) -> int:
     return to_signed(value, DATA_WIDTH)
 
 
+def wrap_to_width(value: int, width: int) -> int:
+    """Wrap/truncate to signed `width` bits."""
+
+    return to_signed(value, width)
+
+
+def saturate_to_width(value: int, width: int) -> int:
+    """Saturate an integer to signed `width` bits."""
+
+    min_value = -(1 << (width - 1))
+    max_value = (1 << (width - 1)) - 1
+    if value > max_value:
+        return max_value
+    if value < min_value:
+        return min_value
+    return int(value)
+
+
+def narrow_to_width(value: int, width: int, saturate: bool = True) -> int:
+    """Narrow `value` either by saturation or two's-complement wrap."""
+
+    if saturate:
+        return saturate_to_width(value, width)
+    return wrap_to_width(value, width)
+
+
 def bit_reverse(index: int, width: int = INDEX_WIDTH) -> int:
     """Reverse FFT index bits, matching rtl/dsp/fft_bit_reverse.v."""
 
@@ -129,7 +155,11 @@ def cos_q14(index: int) -> int:
     return 0
 
 
-def twiddle_q14(addr: int, inverse: bool = False) -> tuple[int, int]:
+def twiddle_q14(
+    addr: int,
+    inverse: bool = False,
+    data_width: int = DATA_WIDTH,
+) -> tuple[int, int]:
     """Return twiddle factor for FFT/IFFT mode using the RTL ROM table."""
 
     rom_addr = mask_to_width(addr, 7)
@@ -144,7 +174,7 @@ def twiddle_q14(addr: int, inverse: bool = False) -> tuple[int, int]:
     if inverse:
         imag = -imag
 
-    return wrap_int16(real), wrap_int16(imag)
+    return wrap_to_width(real, data_width), wrap_to_width(imag, data_width)
 
 
 def complex_mult_q14(
@@ -152,13 +182,15 @@ def complex_mult_q14(
     a_imag: int,
     b_real: int,
     b_imag: int,
+    data_width: int = DATA_WIDTH,
+    saturate: bool = True,
 ) -> tuple[int, int]:
-    """Match rtl/dsp/complex_mult.v with Q2.14 shift and 16-bit truncation."""
+    """Match rtl/dsp/complex_mult.v with Q2.14 shift and saturation."""
 
-    ar = wrap_int16(a_real)
-    ai = wrap_int16(a_imag)
-    br = wrap_int16(b_real)
-    bi = wrap_int16(b_imag)
+    ar = wrap_to_width(a_real, data_width)
+    ai = wrap_to_width(a_imag, data_width)
+    br = wrap_to_width(b_real, data_width)
+    bi = wrap_to_width(b_imag, data_width)
 
     real_full = (ar * br) - (ai * bi)
     imag_full = (ar * bi) + (ai * br)
@@ -166,7 +198,24 @@ def complex_mult_q14(
     real_scaled = real_full >> FRAC_BITS
     imag_scaled = imag_full >> FRAC_BITS
 
-    return wrap_int16(real_scaled), wrap_int16(imag_scaled)
+    return (
+        narrow_to_width(real_scaled, data_width, saturate=saturate),
+        narrow_to_width(imag_scaled, data_width, saturate=saturate),
+    )
+
+
+def apply_q2_14_gain(
+    value: int,
+    gain: int,
+    data_width: int = DATA_WIDTH,
+    saturate: bool = True,
+) -> int:
+    """Match rtl/dsp/spectral_processor.v gain multiply and narrowing."""
+
+    value = wrap_to_width(value, data_width)
+    gain = wrap_to_width(gain, DATA_WIDTH)
+    scaled = (value * gain) >> FRAC_BITS
+    return narrow_to_width(scaled, data_width, saturate=saturate)
 
 
 def butterfly_addresses(stage: int, butterfly_index: int) -> tuple[int, int, int]:
@@ -197,6 +246,8 @@ def fft_radix2_core_fixed_model(
     imag_samples: list[int] | None = None,
     inverse: bool = False,
     normalize_inverse: bool = True,
+    data_width: int = DATA_WIDTH,
+    saturate: bool = True,
 ) -> tuple[list[int], list[int]]:
     """Run the same frame-level computation as the current RTL core."""
 
@@ -209,8 +260,8 @@ def fft_radix2_core_fixed_model(
 
     for index in range(FFT_SIZE):
         write_addr = bit_reverse(index)
-        real_mem[write_addr] = wrap_int16(real_samples[index])
-        imag_mem[write_addr] = wrap_int16(imag_samples[index])
+        real_mem[write_addr] = wrap_to_width(real_samples[index], data_width)
+        imag_mem[write_addr] = wrap_to_width(imag_samples[index], data_width)
 
     for stage in range(NUM_STAGES):
         for butterfly_index in range(BUTTERFLIES_PER_STAGE):
@@ -221,12 +272,18 @@ def fft_radix2_core_fixed_model(
             b_real = real_mem[addr_b]
             b_imag = imag_mem[addr_b]
 
-            tw_real, tw_imag = twiddle_q14(twiddle_index, inverse=inverse)
+            tw_real, tw_imag = twiddle_q14(
+                twiddle_index,
+                inverse=inverse,
+                data_width=data_width,
+            )
             b_tw_real, b_tw_imag = complex_mult_q14(
                 b_real,
                 b_imag,
                 tw_real,
                 tw_imag,
+                data_width=data_width,
+                saturate=saturate,
             )
 
             out_a_real_full = a_real + b_tw_real
@@ -235,15 +292,31 @@ def fft_radix2_core_fixed_model(
             out_b_imag_full = a_imag - b_tw_imag
 
             if inverse and normalize_inverse:
-                out_a_real = wrap_int16(out_a_real_full >> 1)
-                out_a_imag = wrap_int16(out_a_imag_full >> 1)
-                out_b_real = wrap_int16(out_b_real_full >> 1)
-                out_b_imag = wrap_int16(out_b_imag_full >> 1)
-            else:
-                out_a_real = wrap_int16(out_a_real_full)
-                out_a_imag = wrap_int16(out_a_imag_full)
-                out_b_real = wrap_int16(out_b_real_full)
-                out_b_imag = wrap_int16(out_b_imag_full)
+                out_a_real_full >>= 1
+                out_a_imag_full >>= 1
+                out_b_real_full >>= 1
+                out_b_imag_full >>= 1
+
+            out_a_real = narrow_to_width(
+                out_a_real_full,
+                data_width,
+                saturate=saturate,
+            )
+            out_a_imag = narrow_to_width(
+                out_a_imag_full,
+                data_width,
+                saturate=saturate,
+            )
+            out_b_real = narrow_to_width(
+                out_b_real_full,
+                data_width,
+                saturate=saturate,
+            )
+            out_b_imag = narrow_to_width(
+                out_b_imag_full,
+                data_width,
+                saturate=saturate,
+            )
 
             real_mem[addr_a] = out_a_real
             imag_mem[addr_a] = out_a_imag
@@ -251,3 +324,70 @@ def fft_radix2_core_fixed_model(
             imag_mem[addr_b] = out_b_imag
 
     return list(real_mem), list(imag_mem)
+
+
+def fft_ifft_pipeline_fixed_model(
+    samples: list[int],
+    bass_gain: int,
+    mid_gain: int,
+    treble_gain: int,
+    internal_width: int = PIPELINE_INTERNAL_WIDTH,
+    output_width: int = DATA_WIDTH,
+    saturate: bool = True,
+) -> list[int]:
+    """Model the RTL pipeline with wider internal FFT bins and int16 output."""
+
+    if len(samples) != FFT_SIZE:
+        raise ValueError(f"samples must contain exactly {FFT_SIZE} samples")
+
+    zero_imag = [0] * FFT_SIZE
+    input_real = [wrap_to_width(sample, output_width) for sample in samples]
+    fft_real, fft_imag = fft_radix2_core_fixed_model(
+        input_real,
+        zero_imag,
+        inverse=False,
+        data_width=internal_width,
+        saturate=saturate,
+    )
+
+    spectral_real: list[int] = []
+    spectral_imag: list[int] = []
+    for index, (real_value, imag_value) in enumerate(zip(fft_real, fft_imag)):
+        effective_bin = index if index <= FFT_SIZE // 2 else FFT_SIZE - index
+        if effective_bin <= 1:
+            gain = bass_gain
+        elif effective_bin <= 21:
+            gain = mid_gain
+        else:
+            gain = treble_gain
+
+        spectral_real.append(
+            apply_q2_14_gain(
+                real_value,
+                gain,
+                data_width=internal_width,
+                saturate=saturate,
+            )
+        )
+        spectral_imag.append(
+            apply_q2_14_gain(
+                imag_value,
+                gain,
+                data_width=internal_width,
+                saturate=saturate,
+            )
+        )
+
+    ifft_real, _ifft_imag = fft_radix2_core_fixed_model(
+        spectral_real,
+        spectral_imag,
+        inverse=True,
+        normalize_inverse=True,
+        data_width=internal_width,
+        saturate=saturate,
+    )
+
+    return [
+        saturate_to_width(value, output_width)
+        for value in ifft_real
+    ]

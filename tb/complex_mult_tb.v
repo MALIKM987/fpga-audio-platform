@@ -8,10 +8,13 @@ module complex_mult_tb;
     localparam signed [DATA_WIDTH-1:0] Q_ZERO    = 16'sd0;
     localparam signed [DATA_WIDTH-1:0] Q_ONE     = 16'sd16384;
     localparam signed [DATA_WIDTH-1:0] Q_NEG_ONE = -16'sd16384;
+    localparam signed [DATA_WIDTH-1:0] Q_1_50    = 16'sd24576;
     localparam signed [DATA_WIDTH-1:0] Q_HALF    = 16'sd8192;
     localparam signed [DATA_WIDTH-1:0] Q_NEG_HALF = -16'sd8192;
     localparam signed [DATA_WIDTH-1:0] Q_QUARTER = 16'sd4096;
     localparam signed [DATA_WIDTH-1:0] Q_NEG_QUARTER = -16'sd4096;
+    localparam signed [DATA_WIDTH-1:0] INT_MAX   = 16'sd32767;
+    localparam signed [DATA_WIDTH-1:0] INT_MIN   = -16'sd32768;
 
     reg signed [DATA_WIDTH-1:0] a_real = 16'sd123;
     reg signed [DATA_WIDTH-1:0] a_imag = -16'sd456;
@@ -68,6 +71,19 @@ module complex_mult_tb;
         end
     endtask
 
+    function signed [DATA_WIDTH-1:0] saturate_q14;
+        input signed [(2*DATA_WIDTH):0] value;
+        begin
+            if (value > INT_MAX) begin
+                saturate_q14 = INT_MAX;
+            end else if (value < INT_MIN) begin
+                saturate_q14 = INT_MIN;
+            end else begin
+                saturate_q14 = value[DATA_WIDTH-1:0];
+            end
+        end
+    endfunction
+
     function signed [DATA_WIDTH-1:0] expected_real_q14;
         input signed [DATA_WIDTH-1:0] in_a_real;
         input signed [DATA_WIDTH-1:0] in_a_imag;
@@ -77,7 +93,7 @@ module complex_mult_tb;
         begin
             full_value = (in_a_real * in_b_real) -
                          (in_a_imag * in_b_imag);
-            expected_real_q14 = (full_value >>> FRAC_BITS);
+            expected_real_q14 = saturate_q14(full_value >>> FRAC_BITS);
         end
     endfunction
 
@@ -90,14 +106,14 @@ module complex_mult_tb;
         begin
             full_value = (in_a_real * in_b_imag) +
                          (in_a_imag * in_b_real);
-            expected_imag_q14 = (full_value >>> FRAC_BITS);
+            expected_imag_q14 = saturate_q14(full_value >>> FRAC_BITS);
         end
     endfunction
 
     initial begin
         $display("=== COMPLEX MULT TEST ===");
         $display("FORMAT=Q2.14");
-        $display("MODE=COMBINATIONAL_NO_SATURATION");
+        $display("MODE=COMBINATIONAL_WITH_SATURATION");
         $display("");
 
         run_case("multiply_by_one",
@@ -132,6 +148,16 @@ module complex_mult_tb;
                                    Q_HALF, Q_QUARTER),
                  expected_imag_q14(Q_NEG_HALF, Q_QUARTER,
                                    Q_HALF, Q_QUARTER));
+
+        run_case("positive_saturation",
+                 INT_MAX, Q_ZERO,
+                 Q_1_50, Q_ZERO,
+                 INT_MAX, Q_ZERO);
+
+        run_case("negative_saturation",
+                 INT_MIN, Q_ZERO,
+                 Q_1_50, Q_ZERO,
+                 INT_MIN, Q_ZERO);
 
         $display("");
         if (errors == 0) begin

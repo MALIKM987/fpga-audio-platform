@@ -9,8 +9,9 @@
 //
 // The default format is signed Q2.14. Multiplication creates wider internal
 // products, then the result is shifted right by FRAC_BITS to return to Q2.14.
-// This first version is combinational and does not saturate; overflow wraps
-// through truncation after scaling. Saturation can be added later if needed.
+// The scaled result is saturated back to DATA_WIDTH. That keeps twiddle
+// rotation from silently wrapping when a later pipeline stage uses wider
+// internal FFT bins.
 //
 // This module is standalone and is not connected to the current passthrough
 // FFT/IFFT wrappers yet.
@@ -53,7 +54,24 @@ module complex_mult #(
     wire signed [FULL_WIDTH-1:0] real_scaled = real_full >>> FRAC_BITS;
     wire signed [FULL_WIDTH-1:0] imag_scaled = imag_full >>> FRAC_BITS;
 
-    assign out_real = real_scaled[DATA_WIDTH-1:0];
-    assign out_imag = imag_scaled[DATA_WIDTH-1:0];
+    localparam integer GUARD_WIDTH = FULL_WIDTH - DATA_WIDTH + 1;
+
+    function signed [DATA_WIDTH-1:0] saturate_scaled;
+        input signed [FULL_WIDTH-1:0] value;
+        reg [GUARD_WIDTH-1:0] guard_bits;
+        begin
+            guard_bits = value[FULL_WIDTH-1:DATA_WIDTH-1];
+            if (guard_bits == {GUARD_WIDTH{value[DATA_WIDTH-1]}}) begin
+                saturate_scaled = value[DATA_WIDTH-1:0];
+            end else if (value[FULL_WIDTH-1]) begin
+                saturate_scaled = {1'b1, {(DATA_WIDTH-1){1'b0}}};
+            end else begin
+                saturate_scaled = {1'b0, {(DATA_WIDTH-1){1'b1}}};
+            end
+        end
+    endfunction
+
+    assign out_real = saturate_scaled(real_scaled);
+    assign out_imag = saturate_scaled(imag_scaled);
 
 endmodule
