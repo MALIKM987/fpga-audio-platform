@@ -1,706 +1,228 @@
-# FPGA Audio Platform — Tang Nano 20K
+# FPGA Audio Platform
 
-Projekt jest rozwijany jako stereofoniczna platforma audio na FPGA
-Tang Nano 20K.
-Docelowy tor pomiarowy wykorzystuje ADC PCM1808 do akwizycji sygnalu analogowego
-L/R, przetwarzanie w FPGA oraz DAC PCM5102A do wyjscia analogowego L/R
-mierzonego oscyloskopem.
+FPGA Audio Platform to projekt demonstratora DSP dla płytki Sipeed Tang Nano
+20K. Aktualna wersja jest sprawdzalnym systemem blokowego przetwarzania audio:
+komputer PC generuje ramkę 256 próbek, wysyła ją przez UART do FPGA, a FPGA
+przetwarza ramkę w stałoprzecinkowym torze FFT/IFFT sterowanym przez własny mini
+CPU. Wynik wraca przez UART do aplikacji PC, gdzie można go porównać z lokalną
+symulacją i wyeksportować do CSV.
 
-## Obecny cel projektu
+To nie jest jeszcze kompletny system wejścia/wyjścia audio w czasie
+rzeczywistym. Obecnie nie jest używany fizyczny tor I2S z ADC/DAC
+PCM1808/PCM5102A. Działający i przetestowany tryb demonstracyjny jest
+frame-based: PC wysyła próbki, FPGA liczy jedną ramkę, PC odbiera wynik.
 
-Aktualny priorytet to akcelerator FFT/IFFT działający wyłącznie w FPGA,
-przetwarzający bloki danych audio w formacie I2S-like i sprawdzalny z poziomu
-symulacji oraz raportów konsolowych. Fizyczny tor PCM1808/PCM5102A/I2S zostaje
-zachowany jako przyszła warstwa sprzętowa, ale nie jest aktualnym zakresem
-implementacji.
+## Najważniejsze funkcje
 
-Docelowy pipeline dla obecnego etapu:
+- PC Spectrum Lab GUI do generowania sygnału, ustawiania modyfikacji widma,
+  wyboru backendu i oglądania wykresów.
+- Lokalna symulacja float po stronie PC.
+- Mock FPGA backend do testowania protokołu bez sprzętu.
+- Serial FPGA backend do komunikacji z Tang Nano 20K przez UART.
+- Protokół ramek UART z komendami `PING`, `SET_GAINS`,
+  `WRITE_FRAME_CHUNK`, `RUN_FRAME`, `GET_STATUS`, `READ_RESULT_CHUNK`.
+- Top sprzętowy `tang_cpu_owned_frame_uart_top`.
+- Własny mini CPU soft-core z programem w ROM.
+- CPU-owned flow: tylko mini CPU steruje akceleratorem FFT/IFFT przez MMIO.
+- Akcelerator FFT/IFFT z buforami wejścia/wyjścia, rejestrami statusu i
+  procesorem pasm `BASS`, `MID`, `TREBLE`.
+- Stałoprzecinkowy tor DSP: signed int16 dla próbek, Q2.14 dla gainów.
+- Testy Python, testy Verilog, testy CSV/fixed-point i GitHub Actions.
 
-```text
-test generator / I2S-like input model
-    -> sample_block_buffer
-    -> FFT accelerator wrapper
-    -> spectral_processor
-    -> IFFT accelerator wrapper
-    -> I2S-like output model
-    -> console report / UART report
+## Architektura w skrócie
+
+```mermaid
+flowchart LR
+    PC["PC Spectrum Lab GUI"]
+    Proto["UART frame protocol"]
+    UART["Tang Nano UART RX/TX"]
+    Mailbox["Frame mailbox"]
+    CPU["Custom mini CPU"]
+    MMIO["MMIO registers"]
+    DSP["FFT/IFFT DSP accelerator"]
+    Result["Result mailbox"]
+
+    PC --> Proto --> UART --> Mailbox --> CPU --> MMIO --> DSP
+    DSP --> CPU --> Result --> UART --> Proto --> PC
 ```
 
-Pierwsza wersja ma używać `FFT_SIZE = 256`, signed 16-bit próbek stereo L/R,
-arytmetyki fixed-point i wartości gain w formacie Q2.14.
-
-## Aktualny zakres
-
-W tym etapie skupiamy się na:
-
-- logice DSP i sterującej działającej bez zewnętrznego ADC/DAC,
-- testach uruchamianych z poziomu konsoli,
-- modelach ramek audio I2S-like zamiast fizycznego I2S,
-- self-teście diagnostycznym jako obecnej bazie bring-up,
-- dokumentacji i weryfikacji przed implementacją właściwego FFT/IFFT.
-
-Nie implementujemy teraz fizycznego wejścia PCM1808, fizycznego wyjścia
-PCM5102A, ciągłego streamingu audio ani oscyloskopowego toru pomiarowego.
-
-## Status projektu / milestone summary
-
-Czytelne podsumowanie aktualnego stanu projektu, architektury, testów,
-ograniczeń i kolejnych kroków znajduje się w:
+Pełny przepływ danych:
 
 ```text
-docs/project_milestone_summary.md
+PC Spectrum Lab application
+    -> UART frame protocol
+    -> Tang Nano 20K FPGA
+    -> UART RX/TX
+    -> frame mailbox
+    -> custom mini CPU soft-core
+    -> MMIO
+    -> FFT/IFFT fixed-point DSP accelerator
+    -> frame result
+    -> UART back to PC
+    -> GUI plots and CSV export
 ```
 
-Główna, skonsolidowana dokumentacja projektu znajduje się w:
+## Aktualne ograniczenia
+
+- System nie działa jeszcze jako fizyczny realtime audio ADC -> FPGA -> DAC.
+- Aktualnie używany demonstrator nie używa fizycznego I2S audio input/output.
+- PC generuje sygnał testowy i wysyła próbki do FPGA przez UART.
+- FPGA przetwarza ramkę 256 próbek i odsyła wynik do PC.
+- Sprzętowy model modyfikacji widma ma trzy uproszczone pasma:
+  `BASS`, `MID`, `TREBLE`.
+- Gain jest signed Q2.14, więc zakres to `-2.0 .. +1.99994`.
+- Gain większy niż około `+2.0` ulega saturacji do wartości bliskiej `2.0`.
+- Jeśli kilka modyfikacji GUI trafia do tego samego pasma sprzętowego, działa
+  zasada "last one wins".
+- Te zachowania są oczekiwanymi ograniczeniami obecnej implementacji, a nie
+  błędami.
+
+## Hardware
+
+Docelową płytką dla obecnego bring-upu jest Sipeed Tang Nano 20K z układem
+Gowin GW2AR-18. Aktualny top sprzętowy:
 
 ```text
-docs/dokumentacja_projektu_fpga_audio_platform.md
+rtl/top/tang_cpu_owned_frame_uart_top.v
 ```
 
-Checklistę lokalnej syntezy i testów Tang Nano zapisano w:
+Potwierdzone przypisania dla pierwszego testu przez onboard BL616 USB-UART:
 
-```text
-docs/tang_nano_hardware_test_checklist.md
+| Sygnał | Pin | Znaczenie |
+| --- | ---: | --- |
+| `clk` | 4 | zegar płytki |
+| `led` | 15 | status LED, aktywne niskim poziomem |
+| `uart_tx` | 69 | `SYS_TX`, dane z FPGA do PC |
+| `uart_rx` | 70 | `SYS_RX`, dane z PC do FPGA |
+
+Szczegóły są w [docs/tang_nano_hardware.md](docs/tang_nano_hardware.md).
+
+## Uruchomienie aplikacji PC
+
+```powershell
+python tools/spectrum_lab_app.py
 ```
 
-Minimalny top do sprzętowego self-testu realnego pipeline FFT/IFFT opisano w:
+W GUI można wybrać:
 
-```text
-docs/tang_fft_ifft_selftest_top.md
+- `Local simulation` - idealna symulacja float po stronie PC,
+- `Mock FPGA backend` - loopback protokołu bez DSP,
+- `Serial FPGA backend` - realna komunikacja z Tang Nano przez UART.
+
+GUI pokazuje sześć wykresów: wejście, lokalny wynik float, wynik mock, wynik
+serial, różnicę mock-local i różnicę serial-local. Pokazuje też metryki błędu:
+`max abs error`, `mean abs error`, `RMS error`.
+
+## Uruchomienie klienta UART
+
+Mock bez sprzętu:
+
+```powershell
+python tools/spectrum_lab_uart_client.py --mock
 ```
 
-CPU-facing MMIO wrapper i testy warstwowe opisano w:
+Realny port COM po zaprogramowaniu Tang Nano:
 
-```text
-docs/fft_accelerator_mmio.md
+```powershell
+python tools/spectrum_lab_uart_client.py --port COM6
 ```
 
-Wlasny mini CPU i jego niezalezne testy opisano w:
+Numer portu COM zależy od komputera. W Windows sprawdź go w Menedżerze urządzeń.
 
-```text
-docs/custom_mini_cpu.md
+## Test sprzętowy Tang Nano 20K
+
+1. Otwórz projekt w Gowin EDA.
+2. Ustaw top module: `tang_cpu_owned_frame_uart_top`.
+3. Użyj constraints dla `clk`, `led`, `uart_tx`, `uart_rx` zgodnych z pinami
+   powyżej.
+4. Uruchom `Synthesize`.
+5. Uruchom `Place & Route`.
+6. Uruchom `Generate Bitstream`.
+7. Zaprogramuj płytkę przez `SRAM Program`.
+8. Uruchom:
+
+```powershell
+python tools/spectrum_lab_uart_client.py --port COM6
+python tools/spectrum_lab_app.py
 ```
 
-Integracje mini CPU z akceleratorem FFT/IFFT MMIO opisano w:
+W GUI wybierz `Serial FPGA backend`.
 
-```text
-docs/mini_cpu_fft_integration.md
+## Testy
+
+Pełny lokalny runner:
+
+```powershell
+python tools/run_all_tests.py
 ```
 
-Konsolę UART dla mini CPU i akceleratora FFT/IFFT opisano w:
+Wybrane testy PC:
 
-```text
-docs/uart_cpu_fft_console.md
+```powershell
+python tools/test_spectrum_lab_model.py
+python tools/test_spectrum_lab_hardware_backend.py
+python tools/test_fpga_fixed_point_reference_calibration.py
+python tools/spectrum_lab_uart_client.py --mock
 ```
 
-Top Tang Nano dla konsoli UART mini CPU -> FFT/IFFT opisano w:
+GitHub Actions uruchamia testy dla pull requestów do `fpga-only-fft-console`.
 
-```text
-docs/tang_uart_cpu_fft_top.md
-```
+## Struktura projektu
 
-PC Spectrum Lab App w trybie symulacyjnym opisano w:
+| Ścieżka | Rola |
+| --- | --- |
+| `rtl/` | główne źródła RTL |
+| `rtl/top/` | top-level moduły FPGA |
+| `rtl/cpu/` | własny mini CPU i ROM programu |
+| `rtl/uart/` | UART RX/TX, parser ramek i mailbox |
+| `rtl/control/` | rejestry MMIO i wrapper akceleratora |
+| `rtl/dsp/` | FFT/IFFT, spectral processor, fixed-point DSP |
+| `tools/` | aplikacja PC, klient UART, modele i testy Python |
+| `tb/` | testbenche Verilog |
+| `gowin_impl/` | projekt Gowin i kopie źródeł do bitstreamu |
+| `vendor/` | miejsce na przyszłe vendor/IP |
+| `docs/` | końcowa dokumentacja projektu |
 
-```text
-docs/pc_spectrum_lab_app.md
-```
+## Dokumentacja szczegółowa
 
-Ten dokument opisuje też obecne presety GUI, znaczenie wykresów `local`,
-`mock`, `serial` i ostrzeżenia dotyczące Q2.14, Nyquista oraz kolizji pasm
-BASS/MID/TREBLE.
+Zacznij od [docs/README.md](docs/README.md). Najważniejsze dokumenty:
 
-Protokół UART dla przyszłego transferu pełnych ramek próbek opisano w:
+- [docs/architecture.md](docs/architecture.md)
+- [docs/requirements_and_functionality.md](docs/requirements_and_functionality.md)
+- [docs/problem_analysis.md](docs/problem_analysis.md)
+- [docs/pc_application.md](docs/pc_application.md)
+- [docs/uart_protocol.md](docs/uart_protocol.md)
+- [docs/mini_cpu.md](docs/mini_cpu.md)
+- [docs/fft_dsp_accelerator.md](docs/fft_dsp_accelerator.md)
+- [docs/fixed_point_model.md](docs/fixed_point_model.md)
+- [docs/tang_nano_hardware.md](docs/tang_nano_hardware.md)
+- [docs/testing_and_validation.md](docs/testing_and_validation.md)
+- [docs/design_patterns.md](docs/design_patterns.md)
+- [docs/maintenance_and_deployment.md](docs/maintenance_and_deployment.md)
+- [docs/bibliography.md](docs/bibliography.md)
 
-```text
-docs/uart_frame_protocol.md
-```
+## Status implementacji
 
-Samodzielny parser/formatter RTL dla tego protokołu opisano w:
+Zaimplementowane i testowane:
 
-```text
-docs/uart_frame_protocol_rtl.md
-```
+- PC Spectrum Lab GUI,
+- UART frame protocol,
+- mock i serial backend,
+- Tang Nano UART top,
+- frame mailbox,
+- mini CPU soft-core,
+- program ROM z service loop,
+- MMIO akceleratora,
+- FFT/IFFT fixed-point DSP accelerator,
+- BASS/MID/TREBLE spectral gain,
+- fixed-point model i testy porównawcze,
+- GitHub Actions.
 
-Backend bufora ramek FPGA dla tego protokołu opisano w:
+Niezaimplementowane w aktualnym demonstratorze:
 
-```text
-docs/fpga_frame_buffer_backend.md
-```
-
-CPU-owned flow dla pełnych ramek UART opisano w:
-
-```text
-docs/cpu_owned_uart_frame_flow.md
-```
-
-PC-side backend aplikacji Spectrum Lab dla tego protokołu opisano w:
-
-```text
-docs/pc_app_uart_fpga_backend.md
-```
-
-Top Tang Nano dla CPU-owned pełnych ramek UART opisano w:
-
-```text
-docs/tang_cpu_owned_frame_uart_top.md
-```
-
-Procedura potwierdzenia pinów UART dla fizycznego testu Tang Nano jest w:
-
-```text
-docs/tang_uart_pin_confirmation.md
-```
-
-Analiza i poprawka zakresu dynamicznego fixed-point FFT/IFFT jest w:
-
-```text
-docs/fixed_point_scaling_and_saturation.md
-```
-
-Kalibracja porównania ideal-float, modelu fixed-point i realnego FPGA jest w:
-
-```text
-docs/fpga_fixed_point_reference_calibration.md
-```
-
-## Planowana architektura FFT/IFFT
-
-Moduły nowego kierunku zaimplementowane w obecnym etapie:
-
-- `rtl/dsp/sample_block_buffer.v`
-- `rtl/dsp/spectral_gain_select.v`
-- `rtl/dsp/spectral_processor.v`
-- `rtl/dsp/fft_radix2_core.v` jako własny sekwencyjny rdzeń FFT/IFFT radix-2.
-- `rtl/dsp/fft_accel_wrapper.v` jako cienki wrapper FFT z `inverse=0`.
-- `rtl/dsp/ifft_accel_wrapper.v` jako cienki wrapper IFFT z `inverse=1`.
-- `rtl/dsp/fft_ifft_pipeline.v` jako model integracyjny przepływu danych.
-- `rtl/control/fft_control_regs.v` jako bank rejestrów CONTROL/STATUS/PARAM.
-- `rtl/control/fft_accelerator_core.v` jako moduł nadrzędny akceleratora
-  sterowany rejestrami.
-- `rtl/control/fft_mmio_regs.v` jako warstwa rejestrów i pamięci próbek dla
-  prostego interfejsu CPU-facing MMIO.
-- `rtl/control/fft_accelerator_mmio.v` jako wrapper MMIO sterujący
-  `fft_ifft_pipeline` bez dodawania jeszcze CPU, UART ani AXI-Lite.
-- `rtl/cpu/mini_cpu_core.v`, `rtl/cpu/mini_cpu_program_rom.v` i
-  `rtl/cpu/mini_cpu_system.v` jako niezalezny, testowany mini CPU do przyszlego
-  sterowania rejestrami MMIO akceleratora.
-- `rtl/cpu/mini_cpu_fft_system.v` jako symulacyjna integracja mini CPU z
-  `fft_accelerator_mmio`, ramka impulsowa, polling STATUS i GPIO PASS/FAIL.
-- `rtl/uart/uart_rx.v` i `rtl/uart/uart_cpu_fft_console.v` jako binarna konsola
-  UART uruchamiająca program impulsowy CPU i zwracająca wynik przez `uart_tx`.
-- `tools/run_all_tests.py` jako podstawowy runner testów Verilog.
-- `rtl/top/tang_uart_cpu_fft_console_top.v` jako niski poziom ryzyka dla
-  uruchomienia konsoli UART na Tang Nano 20K.
-- `tools/uart_fft_console_client.py` jako opcjonalny klient PC do wysłania
-  pakietu `A5 01 5A` i dekodowania odpowiedzi.
-- `tools/spectrum_lab_model.py` i `tools/spectrum_lab_app.py` jako PC-side
-  Spectrum Lab z czytelnymi wykresami wejścia, lokalnej symulacji, mock/serial
-  FPGA backendu, różnic i metryk błędu.
-- `tools/spectrum_lab_presets.py` jako zestaw gotowych presetów GUI do szybkich
-  demonstracji gainu 1.0, 0.5, 1.8, limitu 2.0, clippingu, multitone,
-  kolizji pasma i ostrzeżenia Nyquista.
-- `tools/uart_frame_protocol.py` jako helpery pakietów UART z jawną długością,
-  checksumą i chunkami 256-próbkowej ramki.
-- `rtl/uart/uart_frame_packet_rx.v`, `rtl/uart/uart_frame_packet_tx.v` i
-  `rtl/uart/uart_frame_mock_backend.v` jako samodzielny model RTL protokołu
-  pakietów UART, jeszcze bez integracji z FFT/IFFT.
-- `rtl/uart/uart_frame_buffer_backend.v` jako backend bufora ramek
-  256-próbkowych dla nowego protokołu UART; `RUN_FRAME` ustawia request dla
-  mini CPU zamiast bezpośrednio sterować akceleratorem.
-- `rtl/cpu/mini_cpu_uart_frame_system.v` jako symulacyjny system, w którym mini
-  CPU czyta mailbox UART, kopiuje ramkę do `fft_accelerator_mmio`, startuje
-  FFT/IFFT, polluje status, zapisuje wynik z powrotem do mailboxa i wraca do
-  oczekiwania na kolejne `RUN_FRAME` bez resetu.
-- `fft_ifft_pipeline.v` używa szerszej wewnętrznej ścieżki fixed-point dla
-  FFT/IFFT i saturuje wynik z powrotem do signed 16-bit na wyjściu.
-- `complex_mult.v`, `spectral_processor.v` i `fft_radix2_core.v` saturują
-  krytyczne zawężenia wyników zamiast cicho zawijać przepełnienia.
-- `rtl/top/tang_cpu_owned_frame_uart_top.v` jako top integrujący bitowy UART,
-  parser/formatter ramek, mailbox UART i `mini_cpu_uart_frame_system` bez
-  zgadywania pinów UART w constraints.
-- `tools/spectrum_lab_hardware_backend.py`, `tools/uart_transport.py` i
-  `tools/spectrum_lab_uart_client.py` jako PC-side backend aplikacji Spectrum Lab
-  dla protokołu pełnych ramek UART; mock działa bez pyserial, a serial backend
-  jest opcjonalny.
-- `tools/spectrum_lab_comparison.py` jako helper porównujący wynik lokalnej
-  symulacji z wynikiem backendu FPGA oraz liczący `max abs`, `mean abs` i
-  `RMS error`.
-- `tools/test_fixed_point_amplitude_sweep.py` jako regresja dla amplitud
-  granicznych, które wcześniej ujawniały przepełnienie forward FFT.
-- `tools/analyze_hardware_csv.py` jako lokalny analizator eksportów CSV z
-  fizycznych testów UART.
-- `tools/compare_float_fixed_fpga.py` oraz
-  `tools/test_fpga_fixed_point_reference_calibration.py` jako narzędzia
-  kalibracji między idealnym modelem float, modelem fixed-point i realnym FPGA.
-- `tools/fft_reference_model.py` jako Pythonowy golden model matematyczny
-  toru FFT -> spectral gain -> IFFT.
-- GitHub Actions uruchamiające testy Verilog dla pull requestów i pushy na
-  branch `fpga-only-fft-console`.
-
-Moduły nadal oznaczone jako TODO:
-
-- dalsza optymalizacja skalowania fixed-point po kolejnych testach sprzętowych,
-- integracja Gowin FFT IP,
-- fizyczny I2S,
-- potwierdzone piny UART i osobny wariant constraints Gowin dla topu UART,
-- parser RTL protokołu pełnych ramek i backend PC -> FPGA,
+- real-time fizyczny tor PCM1808 -> FPGA -> PCM5102A,
+- fizyczne I2S audio input/output dla obecnego pipeline,
 - AXI-Lite,
-- UART bridge do banku rejestrów,
-- hardware PCM1808/PCM5102A.
-
-`sample_block_buffer` zbiera ramkę próbek, a `spectral_gain_select` i
-`spectral_processor` wybierają pasmo binu FFT i stosują gain Q2.14 do części
-rzeczywistej oraz urojonej. Wrappery FFT/IFFT korzystają już z
-`fft_radix2_core.v`; IFFT ma normalizację `1/N` dla `N = 256` wykonaną jako
-arytmetyczne przesunięcie o 8 bitów. `fft_control_regs` dodaje prosty interfejs
-rejestrowy CONTROL/STATUS/PARAM podobny metodologicznie do AXI-Lite, ale
-niezależny od konkretnej magistrali. `fft_accelerator_core` łączy ten bank
-rejestrów z pipeline, tak że zapis bitu START w CONTROL uruchamia
-przetwarzanie, a STATUS pokazuje busy/done/overflow/error. Nowszy
-`fft_accelerator_mmio` dodaje pamięć wejściową i wyjściową widoczną przez MMIO,
-żeby testbench mógł zachowywać się jak prosty CPU zapisujący ramkę, startujący
-akcelerator i odczytujący wybrane wyniki.
-
-## Aktywny self-test
-
-Obecnie aktywny etap przejściowy to self-test diagnostyczny:
-
-```text
-test_signal_gen
-    -> auto_param_controller
-    -> modulation_core
-    -> debug_analyzer
-    -> uart_debug_formatter
-    -> uart_tx
-```
-
-Self-test generuje wewnętrzny sygnał testowy, automatycznie zmienia parametry
-VOL/BASS/MID/TREBLE, uruchamia prosty blok DSP, zbiera min/max/clipping i
-przygotowuje raport diagnostyczny przez UART.
-
-## Hardware TODO / future work
-
-Stary tor fizyczny pozostaje ważny jako future work:
-
-- PCM1808 ADC jako przyszła warstwa wejściowa,
-- PCM5102A DAC jako przyszła warstwa wyjściowa,
-- prawdziwe piny I2S i constraints,
-- testy oscyloskopem,
-- ciągły streaming audio,
-- windowing i overlap-add,
-- integracja FFT/IFFT z realnym torem audio dopiero po weryfikacji FPGA-only.
-
-Szczegóły są opisane w `docs/hardware_todo.md`.
-
-## Aktualna koncepcja hardware
-
-```text
-generator funkcyjny
-    -> analog L/R
-PCM1808 ADC stereo
-    -> I2S stereo
-Tang Nano 20K / FPGA
-    -> I2S stereo
-PCM5102A DAC stereo
-    -> analog L/R
-oscyloskop
-```
-
-Na tym etapie nie uzywamy wzmacniacza mocy ani glosnikow. PCM5102A jest
-traktowany jako wyjscie liniowe L/R do pomiarow oscyloskopem. Wczesniejsze testy
-z prostym wyjsciem I2S/MAX98357A nalezy traktowac jako pomocniczy etap
-demonstracyjny, a nie docelowy tor pomiarowy.
-
-## Elementy sprzetowe
-
-- Tang Nano 20K.
-- PCM1808 ADC stereo I2S.
-- PCM5102A DAC stereo I2S.
-- Generator funkcyjny.
-- Oscyloskop.
-- Zasilacz 5 V.
-- Przewody polaczeniowe.
-- Przyciski.
-- LED-y z rezystorami.
-- Opcjonalnie analizator logiczny.
-
-## Cel projektu
-
-- Zbudowac stereofoniczny tor pomiarowy ADC -> FPGA -> DAC.
-- Uruchomic tryb BYPASS dla weryfikacji toru PCM1808 -> FPGA -> PCM5102A.
-- Dodac sterowanie parametrami audio z przyciskow.
-- Rozwijac bloki DAFX/korektora dla kanalow L/R.
-- Docelowo przygotowac sprzetowa akceleracje FFT/IFFT do przetwarzania
-  widmowego.
-
-## Aktualny status projektu
-
-Zaimplementowane:
-
-- Generatory testowe `tone_gen` i `test_mix_gen`.
-- Prosty korektor DAFX w dziedzinie czasu: `eq3band_simple` i `eq3band_stereo`.
-- `volume_control`.
-- Obsluga przyciskow i rejestrow parametrow L/R.
-- Topy demonstracyjne dla lokalnych zrodel sygnalu z FPGA.
-- `fft_ifft_accel_stub.v` jako stub/interfejs przyszlego akceleratora FFT/IFFT.
-- `sample_block_buffer` jako bufor ramki próbek dla przyszłego FFT.
-- `spectral_gain_select` i `spectral_processor` jako pierwszy blok modyfikacji
-  binów widmowych przez gain Q2.14.
-- `fft_radix2_core` jako własny sekwencyjny rdzeń radix-2 dla FFT/IFFT.
-- `fft_accel_wrapper` i `ifft_accel_wrapper` jako cienkie wrappery nad
-  `fft_radix2_core`, odpowiednio z `inverse=0` i `inverse=1`.
-- `fft_ifft_pipeline` jako model integracyjny:
-  `sample_block_buffer -> fft_accel_wrapper -> spectral_processor ->`
-  `ifft_accel_wrapper`.
-- `fft_control_regs` jako rejestrowy interfejs sterujący z CONTROL, STATUS,
-  gainami i wyborem testu.
-- `fft_accelerator_core` jako nadrzędny model akceleratora:
-  rejestry sterujące + `fft_ifft_pipeline`.
-- `mini_cpu_core`, `mini_cpu_program_rom` i `mini_cpu_system` jako
-  niezalezna infrastruktura prostego CPU do przyszlego sterowania MMIO.
-- `mini_cpu_fft_system` jako symulacyjny system CPU -> FFT/IFFT MMIO z
-  programem impulsowym i GPIO PASS/FAIL.
-- `uart_rx` i `uart_cpu_fft_console` jako symulacyjna konsola UART z binarną
-  komendą RUN i odpowiedzią PASS/DONE/próbki wyjściowe.
-- `tools/run_all_tests.py` jako runner podstawowych testbenchy Verilog.
-- GitHub Actions jako automatyczne uruchamianie testów Verilog na GitHubie.
-
-Niezaimplementowane jeszcze:
-
-- Stabilny tor wejsciowy PCM1808 -> `i2s_rx_stereo`.
-- Pelny BYPASS ADC -> FPGA -> DAC.
-- Pelne przypisanie pinow dla PCM1808/PCM5102A.
-- Dalsza walidacja zakresu fixed-point na sprzęcie.
-- Gowin FFT IP.
-- AXI-Lite.
-- UART bridge do banku rejestrów.
-- Fizyczny I2S dla nowego pipeline.
-- Top Tang Nano i constraints dla nowej konsoli UART.
-- Hardware PCM1808/PCM5102A w ścieżce FFT/IFFT.
-- Overlap-add.
-
-## Tryby pracy
-
-- `SELFTEST` - diagnostyka bez sprzetu zewnetrznego, z wewnetrznym generatorem
-  probek, automatyczna zmiana parametrow, modulacja i raport przez UART TX.
-- `TEST_TONE` / `TEST_MIX` - sygnal generowany lokalnie w FPGA, bez ADC.
-- `BYPASS` - probki z PCM1808 przechodza bez zmian do PCM5102A. To jest
-  najblizszy priorytet sprzetowy.
-- `EQ_DAFX` - probki przechodza przez korektor bass/mid/treble.
-- `FFT_DSP` - planowany tryb przyszly z FFT/IFFT.
-
-## Docelowe bloki logiczne
-
-- `i2s_rx_stereo` - odbior I2S stereo z PCM1808.
-- `audio_pipeline` - BYPASS, potem volume/EQ/FFT DSP.
-- `i2s_tx_stereo` - nadawanie I2S stereo do PCM5102A.
-- `button_controller` - obsluga przyciskow.
-- `parameter_registers` - rejestry volume/EQ/trybow.
-- `led_controller` - sygnalizacja trybu, aktywnego kanalu i clippingu.
-
-## Priorytet przyszlego uruchomienia hardware
-
-Po zweryfikowaniu architektury FPGA-only pierwszym testem fizycznego toru audio
-powinien byc BYPASS bez FFT:
-
-```text
-PCM1808
-    -> i2s_rx_stereo
-    -> audio_pipeline_bypass
-    -> i2s_tx_stereo
-    -> PCM5102A
-```
-
-Dopiero po stabilnym BYPASS nalezy wracac do EQ/DAFX i fizycznej integracji
-FFT/IFFT z ADC/DAC.
-
-## Self-test bez sprzetu zewnetrznego
-
-Tryb `SELFTEST` jest pierwszym bezpiecznym etapem diagnostycznym uruchamianym
-tylko na plytce Tang Nano 20K podlaczonej do komputera przez USB. Nie wymaga
-generatora funkcyjnego, ADC, DAC, kodeka, przyciskow ani dodatkowego toru audio.
-
-Tor logiczny trybu self-test:
-
-```text
-test_signal_gen
-    -> auto_param_controller
-    -> modulation_core
-    -> debug_analyzer
-    -> uart_debug_formatter
-    -> uart_tx
-```
-
-`test_signal_gen` generuje signed 16-bit probki testowe wewnatrz FPGA.
-`auto_param_controller` cyklicznie zmienia tryby:
-
-- `MODE=0`: normal, `VOL=8`, `BASS=0`, `MID=0`, `TREBLE=0`.
-- `MODE=1`: bass boost.
-- `MODE=2`: mid boost.
-- `MODE=3`: treble boost.
-- `MODE=4`: glosniej / clipping test.
-
-`modulation_core` wykonuje uproszczone przetwarzanie w dziedzinie czasu. Nie
-uzywa FFT/IFFT. Rdzen rozdziela probke na proste komponenty bass/mid/treble,
-mnozy je przez gain Q2.14, naklada volume i saturuje wynik do signed 16-bit.
-Sygnal `clip` wskazuje przekroczenie zakresu.
-
-`debug_analyzer` zbiera minimum i maksimum wejscia oraz wyjscia w oknie probek.
-`uart_debug_formatter` wysyla tekst diagnostyczny przez `uart_tx`. UART nie
-przesyla pelnego audio, tylko okresowe raporty tekstowe, np.:
-
-```text
-TANG AUDIO SELFTEST START
-MODE=0 VOL=08 BASS=+0 MID=+0 TREBLE=+0
-IN_MIN=0xC180 IN_MAX=0x3E7F OUT_MIN=0xC180 OUT_MAX=0x3E7F CLIP=0
-```
-
-Wartosci `IN_MIN`, `IN_MAX`, `OUT_MIN` i `OUT_MAX` sa wypisywane szesnastkowo
-jako 16-bit two's complement.
-
-Top trybu diagnostycznego:
-
-```text
-rtl/top/tang_audio_selftest_top.v
-```
-
-Porty diagnostyczne:
-
-- `uart_tx` - wyjscie nadajnika UART 8N1.
-- `led_heartbeat` - proste potwierdzenie pracy logiki.
-- `led_clip` - sygnal clippingu.
-- `led_mode[2:0]` - aktualny tryb automatyczny.
-
-Nie zakladamy, ze samo USB programatora Tang Nano 20K automatycznie udostepnia
-UART z FPGA jako port COM. Jezeli Windows nie pokazuje odpowiedniego portu COM
-albo dokumentacja plytki nie potwierdza polaczenia UART, nalezy potraktowac
-`uart_tx` jako osobny pin FPGA. Do fizycznego odbioru moze byc potrzebny
-zewnetrzny konwerter USB-UART 3.3 V oraz potwierdzone przypisanie pinu TX w
-constraints. Nie nalezy podlaczac 5 V do pinow FPGA.
-
-Symulacje self-testu sa opisane w `docs/simulation_notes.md`. Przyklad dla
-Icarus Verilog:
-
-```powershell
-iverilog -g2001 `
-  -o sim/tang_audio_selftest_top_tb.vvp `
-  rtl/debug/test_signal_gen.v `
-  rtl/debug/auto_param_controller.v `
-  rtl/dsp/gain_lut_q2_14.v `
-  rtl/dsp/volume_lut_q2_14.v `
-  rtl/dsp/modulation_core.v `
-  rtl/debug/debug_analyzer.v `
-  rtl/debug/uart_debug_formatter.v `
-  rtl/uart/uart_tx.v `
-  rtl/top/tang_audio_selftest_top.v `
-  tb/tang_audio_selftest_top_tb.v
-vvp sim/tang_audio_selftest_top_tb.vvp
-```
-
-Aby uruchomic na Tang Nano w Gowin EDA, nalezy dodac nowe pliki RTL do projektu,
-ustawic top `tang_audio_selftest_top`, przypisac potwierdzone piny `clk`, `rst`,
-`uart_tx` i opcjonalnych LED-ow, a nastepnie zaprogramowac plytke. Po
-zaprogramowaniu nalezy sprawdzic w Menedzerze urzadzen Windows, czy widoczny
-jest port COM. Jesli nie ma pewnego portu COM z plytki, uzyc zewnetrznego
-USB-UART 3.3 V podlaczonego do potwierdzonego pinu `uart_tx`.
-
-## Sterowanie
-
-Panel sterowania przewiduje przyciski:
-
-- `VOL_UP`
-- `VOL_DOWN`
-- `BASS_UP`
-- `BASS_DOWN`
-- `MID_UP`
-- `MID_DOWN`
-- `TREBLE_UP`
-- `TREBLE_DOWN`
-- `CHANNEL_SELECT`
-- docelowo `BYPASS_MODE`
-
-Parametry audio sa oddzielne dla kanalu lewego i prawego:
-
-- `volume_L/R`: zakres `0...15`, domyslnie `8`.
-- `bass_gain_L/R`: zakres `-6...+6`, domyslnie `0`.
-- `mid_gain_L/R`: zakres `-6...+6`, domyslnie `0`.
-- `treble_gain_L/R`: zakres `-6...+6`, domyslnie `0`.
-
-W obecnym trybie demonstracyjnym EQ dziala na sygnale testowym z FPGA. Docelowo
-wejsciem EQ maja byc probki z `i2s_rx_stereo` odbierane z PCM1808, a wyjsciem
-I2S do PCM5102A.
-
-## Struktura katalogow
-
-```text
-rtl/audio    - bloki toru audio, obecne I2S TX i przyszle I2S RX
-rtl/common   - bloki wspolne, np. synchronizacja i debounce
-rtl/control  - sterowanie przyciskami i rejestry parametrow
-rtl/debug    - generatory i diagnostyka self-test
-rtl/dsp      - bloki DSP, EQ, gain/volume i stub FFT/IFFT
-rtl/top      - top-level projektu i demonstratory
-rtl/uart     - proste interfejsy UART do diagnostyki
-tb           - testbenche symulacyjne
-docs         - dokumentacja projektu
-gowin_impl   - projekt narzedziowy Gowin
-```
-
-Katalog `rtl/` jest traktowany jako glowne zrodlo RTL. Szczegoly organizacji sa
-opisane w `docs/source_structure_notes.md`.
-
-## Demonstracja akceleratora sterowanego rejestrami
-
-`fft_accelerator_core` pokazuje obecny model akceleratora sterowany przez prosty
-bank rejestrów `fft_control_regs`. Jest to odpowiednik idei znanej z
-laboratoriów CORDIC/AXI: zapis rejestru sterującego, oczekiwanie na zakończenie
-i odczyt rejestru statusu. Na tym etapie nie jest to jeszcze konkretna
-magistrala AXI-Lite, tylko stabilna semantyka `CONTROL_REG` / `STATUS_REG`
-gotowa do późniejszego podłączenia do UART, soft CPU albo mostka AXI-like.
-
-Demonstrację uruchamia się razem z pozostałymi testami:
-
-```powershell
-python tools/run_all_tests.py
-```
-
-Reprezentatywny test to `fft_accelerator_core_tb`. Szczegóły przebiegu i mapa
-rejestrów są opisane w `docs/register_control_demo.md`.
-
-## Model referencyjny FFT/IFFT
-
-`tools/fft_reference_model.py` jest Pythonowym golden model dla toru
-`DFT -> spectral gain -> IDFT`. Działa na czystym Pythonie 3, bez `numpy` i
-`scipy`, dzięki czemu może być uruchamiany w prostym środowisku testowym oraz w
-GitHub Actions.
-
-Model służy do porównania wyników własnej implementacji RTL FFT/IFFT oraz
-późniejszego wariantu z Gowin FFT IP. Aktualne wrappery RTL
-`fft_accel_wrapper.v` i `ifft_accel_wrapper.v` korzystają już z
-`fft_radix2_core.v`, a model bit-exact odzwierciedla ich zachowanie.
-
-Testy modelu uruchamia ten sam runner:
-
-```powershell
-python tools/run_all_tests.py
-```
-
-Szczegóły są opisane w `docs/fft_reference_model.md`.
-
-## Wektory testowe i porównanie RTL
-
-Projekt generuje powtarzalne wektory CSV dla ramek `impulse`, `constant`,
-`single_bin_low`, `single_bin_mid`, `single_bin_high` i `mixed`. Dla każdej
-ramki powstaje oczekiwany wynik obecnego RTL oraz osobny wynik matematycznego
-modelu FFT/IFFT.
-
-Obecny RTL jest porównywany z modelem bit-exact aktualnego toru:
-
-```text
-FFT core -> spectral gain -> normalized IFFT core
-```
-
-Model matematyczny `math_reference_model` pozostaje golden reference dla
-analizy jakości oraz przyszłego wariantu z Gowin FFT IP, ale kryterium PASS/FAIL
-dla obecnego pipeline jest model zgodny bitowo z RTL.
-
-Pełny przepływ uruchamia:
-
-```powershell
-python tools/run_all_tests.py
-```
-
-Szczegóły są opisane w `docs/fft_test_vectors.md`.
-
-## Plan własnej FFT/IFFT
-
-Projekt będzie rozwijany w kierunku własnego, sekwencyjnego rdzenia FFT/IFFT
-radix-2 dla ramek 256 próbek. Plan algorytmu, fixed-point, FSMD, twiddle ROM,
-skalowania, IFFT i testowania opisano w:
-
-```text
-docs/own_fft_ifft_design_plan.md
-```
-
-Obecne `fft_accel_wrapper.v` i `ifft_accel_wrapper.v` używają już
-`fft_radix2_core.v`. Gowin FFT IP zostaje jako opcja przyszłej optymalizacji
-albo wariant porównawczy, ale nie jest pierwszym wyborem implementacyjnym.
-
-## Plan integracji Gowin FFT IP
-
-Plan porównania lub ewentualnego zastąpienia własnego rdzenia blokami Gowin
-FFT/IFFT IP jest opisany w:
-
-```text
-docs/gowin_fft_ip_integration_plan.md
-```
-
-## Przygotowanie importu Gowin FFT IP
-
-Checklistę generowania bloków FFT/IFFT w Gowin EDA zapisano w:
-
-```text
-docs/gowin_fft_ip_generation_checklist.md
-```
-
-Katalog `vendor/gowin_ip/` jest przygotowany jako miejsce na przyszłe,
-wygenerowane lokalnie pliki IP. Pliki IP nie są jeszcze dodane, a dokładne
-porty, parametry, skalowanie i możliwość symulacji trzeba potwierdzić po
-wygenerowaniu IP w Gowin EDA.
-
-## Budowanie i symulacje
-
-Projekt Gowin znajduje sie w:
-
-```text
-gowin_impl/tang_audio_hw/
-```
-
-Aktualny projekt narzedziowy moze uzywac kopii plikow z
-`gowin_impl/tang_audio_hw/src/`. Canonical source pozostaje w `rtl/`.
-
-Testbenche sa w katalogu `tb/`. Komendy przykladowe opisano w
-`docs/simulation_notes.md`.
-
-Uruchamianie podstawowych testów Python/Verilog:
-
-```powershell
-python tools/run_all_tests.py
-```
-
-Skrypt uzywa `iverilog` i `vvp`. Jesli Icarus Verilog nie jest dostepny w PATH,
-wypisze `STATUS=SKIPPED` zamiast udawac poprawne przejscie testow.
-
-Na GitHubie ten sam runner jest uruchamiany przez GitHub Actions dla pushy oraz
-pull requestów do `fpga-only-fft-console`.
-
-## Ostrzezenia sprzetowe
-
-- Sprawdzic poziomy logiczne I2S przed podlaczeniem do Tang Nano 20K.
-- Nie podawac 5 V na piny FPGA.
-- Zapewnic wspolna mase GND miedzy FPGA, PCM1808, PCM5102A, generatorem
-  i oscyloskopem.
-- Zaczac od malej amplitudy generatora.
-- Nie zgadywac pinow FPGA.
-- Sprawdzic sposob taktowania PCM1808 i PCM5102A.
-
-## Ograniczenia aktualnej wersji
-
-- Tor PCM1808 -> FPGA -> PCM5102A nie jest jeszcze zaimplementowany.
-- Aktualne topy EQ/testowe korzystaja z lokalnego generatora w FPGA.
-- Obecny `i2s_tx` wymaga dalszej pracy nad handshake/sample tick.
-- Własny rdzeń FFT/IFFT jest zaimplementowany i podłączony do wrapperów, ale
-  nadal wymaga lokalnego sprawdzenia syntezy, zasobów i timingu w Gowin EDA.
-- Obecna wersja nie ma jeszcze potwierdzonego testu na Tang Nano.
-- Brakuje jeszcze fizycznego I2S i top-levelu testowego dla nowego pipeline.
-
-## Nastepne kroki
-
-- Uruchomic lokalnie synteze i Place & Route w Gowin EDA.
-- Spisac zasoby LUT/FF/B-SRAM/DSP oraz timing/Fmax z raportow Gowin.
-- Dodac top Tang Nano i constraints dla konsoli UART nowego pipeline.
-- Utrzymywac raport konsolowy PASS/FAIL dla kazdego nowego modulu.
-- Dopiero po stabilnym pipeline FFT/IFFT wrocic do warstwy PCM1808/PCM5102A.
-
-## Autor
-
-Maciej Molik
+- pełny system operacyjny albo RISC-V,
+- arbitralne niezależne filtry float w FPGA,
+- streaming audio bez ramek PC/UART.
