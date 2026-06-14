@@ -1,27 +1,25 @@
 # Gowin IP vendor area
 
-Ten katalog jest przeznaczony na pliki IP wygenerowane lokalnie w Gowin EDA.
-Na tym etapie repozytorium nie zawiera jeszcze wygenerowanego FFT ani IFFT IP.
+Ten katalog jest miejscem na przyszłe pliki IP wygenerowane lokalnie w Gowin
+EDA. Aktualny działający tor FFT/IFFT używa własnego rdzenia RTL
+`fft_radix2_core.v`, a nie Gowin FFT IP.
 
-Docelowo katalog będzie przechowywał osobne podkatalogi dla bloków:
+Planowane podkatalogi:
 
-- `fft256/` - forward FFT 256 punktów,
-- `ifft256/` - inverse FFT 256 punktów.
+- `fft256/` - potencjalny forward FFT IP 256 punktów,
+- `ifft256/` - potencjalny inverse FFT IP 256 punktów.
 
-Wygenerowane pliki IP należy dodać dopiero w osobnym PR, po potwierdzeniu:
+Przed dodaniem wygenerowanego IP trzeba potwierdzić:
 
-- licencji i możliwości przechowywania plików w repozytorium,
-- rzeczywistych nazw modułów i portów,
-- parametrów Verilog / konfiguracji IP,
-- formatu danych wejściowych i wyjściowych,
-- skalowania,
-- kolejności wyjścia,
-- plików potrzebnych do symulacji,
-- bibliotek wymaganych przez Gowin EDA.
+- licencję i możliwość przechowywania plików w repozytorium,
+- rzeczywiste nazwy modułów i portów,
+- format wejścia/wyjścia,
+- skalowanie,
+- kolejność próbek/binów,
+- latency,
+- wymagane biblioteki symulacyjne,
+- zgodność z obecnym interfejsem wrapperów.
 
-Nie należy mieszać wygenerowanych plików IP z katalogiem `gowin_impl/`.
-`gowin_impl/` pozostaje projektem narzędziowym Gowin, a `vendor/gowin_ip/`
-ma być miejscem na kontrolowane kopie źródeł IP używanych przez RTL.
-
-Obecne moduły `fft_accel_wrapper.v` i `ifft_accel_wrapper.v` nadal są modelami
-passthrough. Ten katalog przygotowuje tylko miejsce na przyszły import Gowin IP.
+Nie należy mieszać wygenerowanego IP z `gowin_impl/`. `gowin_impl/` jest
+projektem narzędziowym Gowin, a `vendor/gowin_ip/` ma być kontrolowanym miejscem
+na źródła IP.
