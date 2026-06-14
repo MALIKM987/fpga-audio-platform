@@ -625,7 +625,7 @@ module cpu_owned_uart_frame_flow_tb;
         debug_sample_rd_addr = 8'd16;
         #1;
         report_result("frame1_writes_new_output16",
-                      debug_result_sample == 16'sd80);
+                      sample_close(debug_result_sample, 16'sd80));
         report_result("two_back_to_back_transactions",
                       fft_start_write_count >= 2 &&
                       frame_done_write_count >= 2 &&

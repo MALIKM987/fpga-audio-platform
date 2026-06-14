@@ -144,7 +144,7 @@ module fft_ifft_pipeline_tb;
         $display("=== FFT/IFFT PIPELINE MODEL TEST ===");
         $display("FFT_SIZE=%0d", FFT_SIZE);
         $display("MODE=FFT_CORE_PLUS_NORMALIZED_IFFT");
-        $display("NOTE=IFFT output is divided by FFT_SIZE through arithmetic shift by 8.");
+        $display("NOTE=IFFT normalization uses one arithmetic shift per inverse stage.");
         $display("");
 
         repeat (3) @(posedge clk);
