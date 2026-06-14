@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tkinter MVP for PC-side Spectrum Lab simulation mode."""
+"""Tkinter GUI for PC-side Spectrum Lab simulation and FPGA comparison."""
 
 from __future__ import annotations
 
@@ -35,7 +35,16 @@ from spectrum_lab_hardware_backend import (
     float_gain_to_q2_14,
     hardware_gains_from_modifications,
     hardware_operating_warnings,
+    q2_14_to_float,
     run_frame,
+    signal_component_warnings,
+)
+from spectrum_lab_presets import (
+    DEFAULT_PRESET_NAME,
+    format_components,
+    format_modifications,
+    preset_by_name,
+    preset_names,
 )
 from uart_transport import MockFpgaTransport, SerialTransport
 
@@ -44,7 +53,7 @@ class PlotCanvas(tk.Canvas):
     """Small dependency-free line plot widget."""
 
     def __init__(self, master: tk.Widget, title: str) -> None:
-        super().__init__(master, width=360, height=180, bg="white", highlightthickness=1)
+        super().__init__(master, width=420, height=190, bg="white", highlightthickness=1)
         self.title = title
         self.bind("<Configure>", lambda _event: self.redraw([]))
 
@@ -54,15 +63,37 @@ class PlotCanvas(tk.Canvas):
         height = max(1, self.winfo_height())
         pad_left = 34
         pad_right = 8
-        pad_top = 22
-        pad_bottom = 20
+        pad_top = 40
+        pad_bottom = 34
         plot_width = max(1, width - pad_left - pad_right)
         plot_height = max(1, height - pad_top - pad_bottom)
         zero_y = pad_top + plot_height / 2.0
 
-        self.create_text(8, 8, text=self.title, anchor="nw", fill="#222222")
+        self.create_text(
+            8,
+            8,
+            text=self.title,
+            anchor="nw",
+            width=max(1, width - 16),
+            fill="#222222",
+        )
         self.create_line(pad_left, zero_y, width - pad_right, zero_y, fill="#dddddd")
         self.create_line(pad_left, pad_top, pad_left, height - pad_bottom, fill="#dddddd")
+        self.create_text(
+            pad_left + plot_width / 2.0,
+            height - 16,
+            text="X: sample index",
+            anchor="center",
+            fill="#666666",
+        )
+        self.create_text(
+            12,
+            pad_top + plot_height / 2.0,
+            text="Y: normalized amplitude",
+            anchor="center",
+            angle=90,
+            fill="#666666",
+        )
 
         if not values:
             self.create_text(width / 2, height / 2, text="no data", fill="#777777")
@@ -82,7 +113,7 @@ class PlotCanvas(tk.Canvas):
 
         self.create_text(
             width - pad_right,
-            height - 5,
+            height - 4,
             text=f"max={max_abs:.3g}",
             anchor="se",
             fill="#666666",
@@ -128,7 +159,7 @@ class SpectrumLabApp(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
         self.title("FPGA Audio Platform - PC Spectrum Lab")
-        self.geometry("1120x860")
+        self.geometry("1240x980")
         self.result: SpectrumLabResult | None = None
         self.mock_comparison: FrameComparison | None = None
         self.serial_comparison: FrameComparison | None = None
@@ -136,12 +167,17 @@ class SpectrumLabApp(tk.Tk):
         self.sample_rate_var = tk.StringVar(value=str(int(DEFAULT_SAMPLE_RATE_HZ)))
         self.frame_size_var = tk.StringVar(value=str(DEFAULT_FRAME_SIZE))
         self.backend_mode_var = tk.StringVar(value="Local simulation")
+        self.preset_var = tk.StringVar(value=DEFAULT_PRESET_NAME)
         self.serial_port_var = tk.StringVar(value="COM5")
         self.baud_var = tk.StringVar(value="115200")
-        self.status_var = tk.StringVar(value="Ready. Backend: Local simulation.")
 
         self._build_layout()
         self._load_default_values()
+        self._set_status(
+            "Ready.\n"
+            "Backend: Local simulation.\n"
+            "Choose a preset or edit the input tables, then run Generate / Simulate."
+        )
 
     def _build_layout(self) -> None:
         root = ttk.Frame(self, padding=10)
@@ -170,6 +206,29 @@ class SpectrumLabApp(tk.Tk):
             padx=4,
         )
 
+        preset_settings = ttk.Frame(root)
+        preset_settings.pack(fill="x", pady=(8, 0))
+        ttk.Label(preset_settings, text="Preset").pack(side="left")
+        ttk.Combobox(
+            preset_settings,
+            textvariable=self.preset_var,
+            width=30,
+            state="readonly",
+            values=preset_names(),
+        ).pack(side="left", padx=(4, 8))
+        ttk.Button(
+            preset_settings,
+            text="Load preset",
+            command=lambda: self._load_preset(self.preset_var.get()),
+        ).pack(side="left", padx=4)
+        ttk.Label(
+            preset_settings,
+            text=(
+                "Hardware mapping: GUI bands collapse to current FPGA "
+                "BASS/MID/TREBLE gains."
+            ),
+        ).pack(side="left", padx=(16, 0))
+
         backend_settings = ttk.Frame(root)
         backend_settings.pack(fill="x", pady=(8, 0))
         ttk.Label(backend_settings, text="Backend").pack(side="left")
@@ -195,13 +254,49 @@ class SpectrumLabApp(tk.Tk):
             padx=(4, 0),
         )
 
+        info = ttk.PanedWindow(root, orient="horizontal")
+        info.pack(fill="x", pady=(8, 0))
+
+        fixed_info = ttk.LabelFrame(info, text="Fixed-point FPGA limits")
+        ttk.Label(
+            fixed_info,
+            justify="left",
+            text=(
+                "Gain format: signed Q2.14\n"
+                "Representable range: -2.0 .. +1.99994\n"
+                "Recommended GUI gain range: 0.25 .. 1.8\n"
+                "Gain > 2.0 clips in FPGA to about +1.99994\n"
+                "Frame size: 256 samples, Fs: 48000 Hz, Nyquist: 24000 Hz"
+            ),
+        ).pack(fill="x", padx=6, pady=6)
+        info.add(fixed_info, weight=1)
+
+        backend_info = ttk.LabelFrame(info, text="Backend meanings")
+        ttk.Label(
+            backend_info,
+            justify="left",
+            text=(
+                "Local float simulation: ideal PC-side spectrum modification.\n"
+                "Mock FPGA backend: UART protocol loopback, no DSP.\n"
+                "Serial FPGA backend: real Tang Nano fixed-point DSP result.\n"
+                "Differences versus local float are expected near Q2.14 and "
+                "BASS/MID/TREBLE limits."
+            ),
+        ).pack(fill="x", padx=6, pady=6)
+        info.add(backend_info, weight=1)
+
         editors = ttk.PanedWindow(root, orient="horizontal")
         editors.pack(fill="x", pady=10)
 
         component_frame = ttk.LabelFrame(
             editors,
-            text="Frequency components: frequency_hz, amplitude, phase_rad",
+            text="Input signal components: frequency_hz, amplitude, phase_rad",
         )
+        ttk.Label(
+            component_frame,
+            justify="left",
+            text="Example: 1000, 0.25, 0.  Frequencies above Nyquist warn.",
+        ).pack(fill="x", padx=6, pady=(6, 0))
         self.component_text = tk.Text(component_frame, height=7, width=54)
         self.component_text.pack(fill="both", expand=True, padx=6, pady=6)
         editors.add(component_frame, weight=1)
@@ -210,6 +305,14 @@ class SpectrumLabApp(tk.Tk):
             editors,
             text="Spectrum modifications: center_hz, bandwidth_hz, gain",
         )
+        ttk.Label(
+            modification_frame,
+            justify="left",
+            text=(
+                "Example: 1000, 600, 1.5.  FPGA currently sends only one "
+                "gain per BASS/MID/TREBLE band."
+            ),
+        ).pack(fill="x", padx=6, pady=(6, 0))
         self.modification_text = tk.Text(modification_frame, height=7, width=54)
         self.modification_text.pack(fill="both", expand=True, padx=6, pady=6)
         editors.add(modification_frame, weight=1)
@@ -217,12 +320,30 @@ class SpectrumLabApp(tk.Tk):
         plot_grid = ttk.Frame(root)
         plot_grid.pack(fill="both", expand=True)
 
-        self.input_time_plot = PlotCanvas(plot_grid, "Input signal")
-        self.local_output_plot = PlotCanvas(plot_grid, "Local simulation output")
-        self.mock_output_plot = PlotCanvas(plot_grid, "Mock FPGA backend")
-        self.serial_output_plot = PlotCanvas(plot_grid, "Serial FPGA backend")
-        self.mock_diff_plot = PlotCanvas(plot_grid, "Mock - local difference")
-        self.serial_diff_plot = PlotCanvas(plot_grid, "Serial - local difference")
+        self.input_time_plot = PlotCanvas(
+            plot_grid,
+            "Input signal - generated time-domain input",
+        )
+        self.local_output_plot = PlotCanvas(
+            plot_grid,
+            "Local float simulation - ideal PC-side spectrum modification",
+        )
+        self.mock_output_plot = PlotCanvas(
+            plot_grid,
+            "Mock FPGA backend - protocol loopback / no DSP",
+        )
+        self.serial_output_plot = PlotCanvas(
+            plot_grid,
+            "Serial FPGA backend - real Tang Nano fixed-point DSP result",
+        )
+        self.mock_diff_plot = PlotCanvas(
+            plot_grid,
+            "Mock - local difference - loopback minus ideal float",
+        )
+        self.serial_diff_plot = PlotCanvas(
+            plot_grid,
+            "Serial - local difference - real FPGA fixed-point minus ideal float",
+        )
 
         plots = [
             self.input_time_plot,
@@ -245,21 +366,43 @@ class SpectrumLabApp(tk.Tk):
 
         status = ttk.LabelFrame(root, text="Status / log")
         status.pack(fill="x", pady=(10, 0))
-        ttk.Label(status, textvariable=self.status_var, justify="left").pack(
-            fill="x",
+        self.status_text = tk.Text(
+            status,
+            height=10,
+            wrap="word",
+            state="disabled",
+            bg="#f8f8f8",
+            relief="flat",
+        )
+        self.status_text.pack(
+            fill="both",
             padx=6,
             pady=6,
         )
 
     def _load_default_values(self) -> None:
-        self.component_text.insert(
-            "1.0",
-            "1000, 0.70, 0\n2700, 0.35, 0.3\n6200, 0.20, 0\n",
+        self._load_preset(DEFAULT_PRESET_NAME)
+
+    def _replace_text(self, widget: tk.Text, text: str) -> None:
+        widget.delete("1.0", "end")
+        widget.insert("1.0", text)
+
+    def _load_preset(self, name: str) -> None:
+        preset = preset_by_name(name)
+        self.preset_var.set(preset.name)
+        self._replace_text(self.component_text, format_components(preset.components))
+        self._replace_text(self.modification_text, format_modifications(preset.modifications))
+        self._set_status(
+            f"Loaded preset: {preset.name}\n"
+            f"Description: {preset.description}\n"
+            "Run Generate / Simulate to update plots and backend comparisons."
         )
-        self.modification_text.insert(
-            "1.0",
-            "1000, 300, 1.8\n2700, 500, 0.5\n",
-        )
+
+    def _set_status(self, text: str) -> None:
+        self.status_text.configure(state="normal")
+        self.status_text.delete("1.0", "end")
+        self.status_text.insert("1.0", text)
+        self.status_text.configure(state="disabled")
 
     def _settings(self) -> tuple[float, int]:
         sample_rate = float(self.sample_rate_var.get())
@@ -386,44 +529,78 @@ class SpectrumLabApp(tk.Tk):
         input_max = max(abs(value) for value in self.result.input_signal) if frame_size else 0.0
         output_max = max(abs(value) for value in self.result.output_signal) if frame_size else 0.0
         warnings = []
+        warnings.extend(signal_component_warnings(components, sample_rate_hz=sample_rate))
         if self.result.input_int16.clipped:
-            warnings.append("input clipping")
+            warnings.append(
+                "input clipping: generated float input exceeded signed int16 range"
+            )
         if self.result.output_int16.clipped:
-            warnings.append("output clipping")
+            warnings.append(
+                "output clipping: local float output exceeded signed int16 range"
+            )
         warnings.extend(
             hardware_operating_warnings(
                 modifications,
-                sample_rate_hz=float(self.sample_rate_var.get()),
+                sample_rate_hz=sample_rate,
                 frame_size=frame_size,
             )
         )
-        warning_text = ", ".join(warnings) if warnings else "no clipping"
+
+        gain_lines = [
+            "FPGA gains sent over UART (signed Q2.14):",
+            (
+                f"- bass={gains.bass_gain} ({q2_14_to_float(gains.bass_gain):.5f}), "
+                f"mid={gains.mid_gain} ({q2_14_to_float(gains.mid_gain):.5f}), "
+                f"treble={gains.treble_gain} ({q2_14_to_float(gains.treble_gain):.5f})"
+            ),
+        ]
+
+        warning_lines = ["Warnings:"]
+        if warnings:
+            warning_lines.extend(f"- {warning}" for warning in warnings)
+        else:
+            warning_lines.append("- none")
 
         comparison_lines = [
-            f"samples={frame_size}; input_max={input_max:.4f}; "
-            f"local_output_max={output_max:.4f}; {warning_text}; "
-            f"backend={backend_note}",
+            "Summary:",
+            f"- samples: {frame_size}",
+            f"- input max abs: {input_max:.4f}",
+            f"- local float output max abs: {output_max:.4f}",
+            f"- selected backend: {self.backend_mode_var.get()}",
+            f"- backend status: {backend_note}",
+            "",
+            *gain_lines,
+            "",
+            *warning_lines,
+            "",
+            "Comparison metrics:",
         ]
 
         if self.mock_comparison is not None:
             comparison_lines.append(
-                "mock_vs_local: "
+                "- mock_vs_local: "
                 + format_error_metrics(self.mock_comparison.metrics)
-                + "; mock is protocol loopback, so nonzero difference is expected "
-                + "when spectral gains change the local simulation"
+            )
+            comparison_lines.append(
+                "  Mock is protocol loopback / no DSP, so nonzero difference is "
+                "expected when local float spectral gains change the signal."
             )
         else:
-            comparison_lines.append("mock_vs_local: unavailable")
+            comparison_lines.append("- mock_vs_local: unavailable")
 
         if self.serial_comparison is not None:
             comparison_lines.append(
-                "serial_vs_local: "
+                "- serial_vs_local: "
                 + format_error_metrics(self.serial_comparison.metrics)
             )
+            comparison_lines.append(
+                "  Serial FPGA is fixed-point BASS/MID/TREBLE DSP; differences "
+                "from ideal local float are expected near fixed-point and band limits."
+            )
         else:
-            comparison_lines.append(f"serial_vs_local: {serial_note}")
+            comparison_lines.append(f"- serial_vs_local: {serial_note}")
 
-        self.status_var.set("\n".join(comparison_lines))
+        self._set_status("\n".join(comparison_lines))
 
     def clear(self) -> None:
         self.result = None
@@ -440,7 +617,7 @@ class SpectrumLabApp(tk.Tk):
             self.serial_diff_plot,
         ]:
             plot.redraw([])
-        self.status_var.set("Ready. Backend: Local simulation.")
+        self._set_status("Ready. Backend: Local simulation.")
 
     def export_samples(self) -> None:
         if self.result is None:
@@ -511,8 +688,8 @@ class SpectrumLabApp(tk.Tk):
                     ]
                 )
 
-        self.status_var.set(
-            f"exported={path}; backend={self.backend_mode_var.get()}"
+        self._set_status(
+            f"Exported CSV: {path}\nBackend: {self.backend_mode_var.get()}"
         )
 
 

@@ -295,6 +295,27 @@ Rekomendowany zakres użytkowy dla testów PC -> FPGA:
 Wartości powyżej `~2.0` powinny być traktowane jako poza zakresem obecnego
 formatu Q2.14. GUI pokazuje ostrzeżenie, że taki gain zostanie przycięty.
 
+## Widoczność ograniczeń w GUI
+
+PC Spectrum Lab App pokazuje teraz te ograniczenia bezpośrednio w interfejsie:
+
+- panel fixed-point przypomina format signed Q2.14, zakres `-2.0..+1.99994`,
+  zalecany zakres `0.25..1.8`, rozmiar ramki 256, `Fs = 48000 Hz` i Nyquista
+  `24000 Hz`,
+- presety `Sine gain 2.0 limit` oraz `Gain clipping demo 4.0` pokazują granicę
+  dodatniego gainu,
+- preset `Same band warning demo` pokazuje, że kilka pasm GUI może trafić do
+  jednego sprzętowego pasma BASS/MID/TREBLE,
+- preset `Nyquist warning demo` pokazuje ostrzeżenie dla częstotliwości powyżej
+  Nyquista,
+- status GUI rozdziela wynik lokalny ideal-float, mock loopback i realny serial
+  FPGA fixed-point.
+
+Mock backend nadal zwraca loopback wejścia, więc jego różnica względem lokalnej
+symulacji float jest oczekiwana. Serial FPGA backend należy porównywać z
+uwzględnieniem fixed-point Q2.14 i aktualnego sprzętowego mapowania
+BASS/MID/TREBLE.
+
 Rekomendowany zakres amplitudy zależy od liczby składowych i gainu. Po PR #62
 pojedyncze sinusy testowane do około `0.015` działały poprawnie dla gainu
 `0.5`, a złożony test TG4 zachował bardzo dobrą zgodność z fixed-point modelem.

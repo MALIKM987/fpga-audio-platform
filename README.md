@@ -105,6 +105,10 @@ PC Spectrum Lab App w trybie symulacyjnym opisano w:
 docs/pc_spectrum_lab_app.md
 ```
 
+Ten dokument opisuje też obecne presety GUI, znaczenie wykresów `local`,
+`mock`, `serial` i ostrzeżenia dotyczące Q2.14, Nyquista oraz kolizji pasm
+BASS/MID/TREBLE.
+
 Protokół UART dla przyszłego transferu pełnych ramek próbek opisano w:
 
 ```text
@@ -189,8 +193,12 @@ Moduły nowego kierunku zaimplementowane w obecnym etapie:
   uruchomienia konsoli UART na Tang Nano 20K.
 - `tools/uart_fft_console_client.py` jako opcjonalny klient PC do wysłania
   pakietu `A5 01 5A` i dekodowania odpowiedzi.
-- `tools/spectrum_lab_model.py` i `tools/spectrum_lab_app.py` jako pierwszy
-  PC-side Spectrum Lab w trybie simulation-only.
+- `tools/spectrum_lab_model.py` i `tools/spectrum_lab_app.py` jako PC-side
+  Spectrum Lab z czytelnymi wykresami wejścia, lokalnej symulacji, mock/serial
+  FPGA backendu, różnic i metryk błędu.
+- `tools/spectrum_lab_presets.py` jako zestaw gotowych presetów GUI do szybkich
+  demonstracji gainu 1.0, 0.5, 1.8, limitu 2.0, clippingu, multitone,
+  kolizji pasma i ostrzeżenia Nyquista.
 - `tools/uart_frame_protocol.py` jako helpery pakietów UART z jawną długością,
   checksumą i chunkami 256-próbkowej ramki.
 - `rtl/uart/uart_frame_packet_rx.v`, `rtl/uart/uart_frame_packet_tx.v` i

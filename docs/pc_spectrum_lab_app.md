@@ -58,6 +58,13 @@ tools/test_spectrum_lab_comparison.py
 
 Model nie wymaga `numpy`, `scipy`, `matplotlib` ani `pyserial`.
 
+Presety GUI są zdefiniowane osobno, żeby można było testować je bez Tkintera:
+
+```text
+tools/spectrum_lab_presets.py
+tools/test_spectrum_lab_presets.py
+```
+
 ## Tryby pracy
 
 Aplikacja zawsze liczy lokalny wynik symulacji. Dla ramki 256 próbek może też
@@ -72,6 +79,28 @@ uruchomić backendy zgodne z protokołem pełnych ramek UART:
 Mock backend nie jest modelem matematycznym FFT/IFFT. Jeżeli lokalna symulacja
 zmienia widmo, a mock zwraca kopię wejścia, różnica `mock - local` jest
 oczekiwana i widoczna w metrykach.
+
+## Znaczenie wykresów
+
+GUI pokazuje sześć wykresów z opisami osi:
+
+- `Input signal — generated time-domain input` pokazuje ramkę wejściową po
+  wygenerowaniu z listy sinusów.
+- `Local float simulation — ideal PC-side spectrum modification` pokazuje wynik
+  lokalnego modelu DFT -> modyfikacja widma -> IDFT.
+- `Mock FPGA backend — protocol loopback / no DSP` pokazuje odpowiedź mocka
+  protokołu UART. Mock zwraca wejście, więc przy aktywnych gainach różnica
+  względem lokalnej symulacji jest oczekiwana.
+- `Serial FPGA backend — real Tang Nano fixed-point DSP result` pokazuje wynik
+  odebrany z prawdziwego FPGA, jeśli użytkownik wybierze port szeregowy.
+- `Mock - local difference — loopback minus ideal float` pokazuje różnicę mocka
+  względem lokalnego modelu ideal-float.
+- `Serial - local difference — real FPGA fixed-point minus ideal float` pokazuje
+  różnicę prawdziwego FPGA względem lokalnego modelu ideal-float.
+
+Oś X oznacza indeks próbki w ramce, a oś Y znormalizowaną amplitudę w obrębie
+danego wykresu. Metryki `max abs error`, `mean abs error` i `RMS error` są
+pokazywane w czytelnym logu statusu.
 
 ## Generowanie sygnału
 
@@ -99,6 +128,9 @@ nie pasuje do siatki binów, w widmie pojawi się naturalny spectral leakage.
 Aplikacja tego nie ukrywa, bo jest to ważne zjawisko dla przyszłych testów
 sprzętowych.
 
+Jeżeli częstotliwość składowej wejściowej przekracza Nyquista, GUI pokazuje
+ostrzeżenie. Dla domyślnego `Fs = 48000 Hz` granica Nyquista wynosi `24000 Hz`.
+
 ## Modyfikacje widma
 
 Modyfikacje widma są definiowane jako proste pasma:
@@ -123,6 +155,32 @@ effective_frequency = min(k, N-k) * sample_rate / N
 
 Dzięki temu pasmo obejmuje zarówno dodatnią, jak i lustrzaną część widma.
 
+Aktualny backend FPGA nie wysyła jednak dowolnej maski widma. Do sprzętu trafiają
+tylko trzy gainy:
+
+```text
+BASS
+MID
+TREBLE
+```
+
+Jeżeli kilka modyfikacji GUI trafia do tego samego sprzętowego pasma, GUI
+pokazuje ostrzeżenie `same hardware band collision`. W aktualnym protokole do
+FPGA trafia ostatni gain dla danego pasma.
+
+Gainy wysyłane do FPGA mają format signed Q2.14:
+
+```text
+1.00 -> 16384
+0.50 -> 8192
+1.50 -> 24576
+max  -> 32767, czyli około +1.99994
+min  -> -32768, czyli -2.0
+```
+
+GUI ostrzega, gdy gain jest większy niż `+1.99994` albo mniejszy niż `-2.0`.
+Wartości poza zakresem są w FPGA przycinane do reprezentowalnego limitu.
+
 ## Przygotowanie int16
 
 Model potrafi przeliczyć próbki float na signed int16. Jest to przygotowanie
@@ -135,6 +193,8 @@ pod przyszły transfer ramek do FPGA:
 
 W obecnym MVP int16 jest tylko przygotowaniem danych i diagnostyką. Nie ma
 jeszcze transferu ramki do Tang Nano.
+
+GUI pokazuje osobne ostrzeżenia dla clippingu wejścia i clippingu wyjścia.
 
 ## GUI
 
@@ -151,6 +211,7 @@ Minimalne funkcje:
 
 - edycja składowych sygnału,
 - edycja modyfikacji widma,
+- selektor presetów,
 - ustawienie sample rate i frame size,
 - przycisk `Generate / Simulate`,
 - przycisk `Clear`,
@@ -162,6 +223,21 @@ Minimalne funkcje:
 - wykres różnicy `mock - local`,
 - wykres różnicy `serial - local`, jeśli serial jest dostępny,
 - status z clippingiem i metrykami `max abs`, `mean abs`, `RMS error`.
+
+Obecne presety:
+
+- `Sine gain 1.0`
+- `Sine gain 0.5`
+- `Sine gain 1.8`
+- `Sine gain 2.0 limit`
+- `Gain clipping demo 4.0`
+- `Multitone moderate`
+- `Multitone near limit`
+- `Same band warning demo`
+- `Nyquist warning demo`
+
+Presety są dobrane tak, żeby szybko pokazać normalne przypadki, granice Q2.14,
+kolizję pasma sprzętowego oraz ostrzeżenie Nyquista.
 
 ## CLI demo
 
@@ -188,6 +264,7 @@ Model nie-GUI jest testowany przez:
 ```text
 python tools/test_spectrum_lab_model.py
 python tools/test_spectrum_lab_comparison.py
+python tools/test_spectrum_lab_presets.py
 ```
 
 Pełny runner projektu:
@@ -206,6 +283,8 @@ Test sprawdza:
 - pełny przebieg modelu bez zależności GUI.
 - metryki porównawcze `max abs`, `mean abs`, `RMS error`,
 - ścieżkę Mock FPGA backend i oczekiwaną różnicę względem lokalnej symulacji.
+- definicje presetów GUI oraz generowanie ostrzeżeń dla gainu poza Q2.14,
+  częstotliwości powyżej Nyquista i kolizji sprzętowego pasma.
 
 ## Ograniczenia
 
