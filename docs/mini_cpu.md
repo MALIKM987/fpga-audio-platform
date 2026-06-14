@@ -1,4 +1,4 @@
-# Własny mini CPU
+# Mini CPU
 
 Projekt używa własnego mini CPU soft-core napisanego w Verilogu. Nie jest to
 ARM, RISC-V, STM32 ani gotowy procesor zewnętrzny. Jest to prosty procesor
