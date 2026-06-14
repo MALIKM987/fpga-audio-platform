@@ -14,6 +14,8 @@ module spectral_processor_tb;
     localparam signed [15:0] GAIN_0_75 = 16'sd12288;
     localparam signed [15:0] GAIN_1_00 = 16'sd16384;
     localparam signed [15:0] GAIN_1_50 = 16'sd24576;
+    localparam signed [15:0] INT_MAX   = 16'sd32767;
+    localparam signed [15:0] INT_MIN   = -16'sd32768;
 
     reg clk = 1'b0;
     reg rst = 1'b1;
@@ -98,6 +100,38 @@ module spectral_processor_tb;
         end
     endtask
 
+    task run_saturation_case;
+        begin
+            @(negedge clk);
+            bin_index = 8'd1;
+            real_in = 16'sd30000;
+            imag_in = -16'sd30000;
+            in_valid = 1'b1;
+
+            @(posedge clk);
+            #1;
+
+            if ((out_valid !== 1'b1) ||
+                (band_id !== BAND_BASS) ||
+                (selected_gain !== GAIN_1_50) ||
+                (real_out !== INT_MAX) ||
+                (imag_out !== INT_MIN)) begin
+                errors = errors + 1;
+                $display("TEST saturation_gain FAIL");
+                $display("  expected: out_valid=1 band_id=%0d gain=%0d real=%0d imag=%0d",
+                         BAND_BASS, GAIN_1_50, INT_MAX, INT_MIN);
+                $display("  actual:   out_valid=%0d band_id=%0d gain=%0d real=%0d imag=%0d",
+                         out_valid, band_id, selected_gain, real_out, imag_out);
+            end else begin
+                $display("TEST saturation_gain real_out=%0d imag_out=%0d PASS",
+                         real_out, imag_out);
+            end
+
+            @(negedge clk);
+            in_valid = 1'b0;
+        end
+    endtask
+
     task run_invalid_case;
         begin
             @(negedge clk);
@@ -139,6 +173,7 @@ module spectral_processor_tb;
                        "mirror_bin=246", "MID",    "1.00");
         run_valid_case(8'd216, BAND_TREBLE, GAIN_0_75, 16'sd750,  -16'sd1500,
                        "mirror_bin=216", "TREBLE", "0.75");
+        run_saturation_case();
         run_invalid_case();
 
         $display("");

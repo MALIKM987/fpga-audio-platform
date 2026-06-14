@@ -22,6 +22,10 @@ PYTHON_TESTS = [
         "command": [sys.executable, "tools/test_fft_radix2_fixed_model.py"],
     },
     {
+        "name": "fixed_point_amplitude_sweep",
+        "command": [sys.executable, "tools/test_fixed_point_amplitude_sweep.py"],
+    },
+    {
         "name": "spectrum_lab_model",
         "command": [sys.executable, "tools/test_spectrum_lab_model.py"],
     },
