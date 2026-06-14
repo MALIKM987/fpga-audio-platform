@@ -80,9 +80,3 @@ sprzętowej:
 - mają dobrze określone stany `start`, `busy`, `done`,
 - mogą być sterowane przez mały procesor i rejestry MMIO,
 - są łatwe do testowania wektorami referencyjnymi.
-
-## Wniosek inżynierski
-
-Najpierw zbudowano system blokowy i weryfikowalny konsolowo. Dopiero po
-potwierdzeniu poprawności fixed-point, UART i CPU-owned flow sensowne jest
-dodawanie fizycznego realtime audio I/O.
