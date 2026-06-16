@@ -86,7 +86,7 @@ Gowin GW2AR-18. Aktualny top sprzętowy:
 rtl/top/tang_cpu_owned_frame_uart_top.v
 ```
 
-Potwierdzone przypisania dla pierwszego testu przez onboard BL616 USB-UART:
+Przypisania dla pierwszego testu przez onboard BL616 USB-UART:
 
 | Sygnał | Pin | Znaczenie |
 | --- | ---: | --- |
